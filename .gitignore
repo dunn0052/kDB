@@ -37,6 +37,7 @@ build/
 CMakeCache.*
 Makefile
 CMakeFiles/
+debug/
 
 #vscode
 .vscode/
