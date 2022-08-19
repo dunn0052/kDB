@@ -7,7 +7,7 @@ set( INC inc )
 
 include_directories( ${INC} ${INC}/../../common_inc ${INC}/../../CLI/inc ${INC}/../../Logger/inc)
 
-add_compile_definitions( _LOG_DEBUG )
+add_compile_definitions( _ENABLE_LOGGING )
 set(CXXSRC ${SRC}/main.cpp ${SRC}/schema.cpp )
 
 add_executable(${PROJECT_NAME}  ${CXXSRC} )

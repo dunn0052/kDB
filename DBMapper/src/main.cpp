@@ -2,16 +2,46 @@
 #include <iostream>
 #include <fcntl.h>
 #include <string>
-#include <test.hh>
+#include <TEST.hh>
 
-int main()
+#include <CLI.hh>
+
+class CLI_ObjectArgs : public CLI::CLI_Argument<OBJECT, 1, 1>
 {
+        using CLI_Argument::CLI_Argument;
+
+        bool TryConversion(const std::string& conversion, OBJECT& value)
+        {
+            value = conversion;
+            return true;
+        }
+};
+
+int main(int argc, char* argv[])
+{
+    CLI::Parser parse("Database Mapper", "Read mapped objects");
+    CLI_ObjectArgs objArg("--object", "Name of object", true);
+    CLI::CLI_IntArgument recordArg("-r", "Object record", true);
+    parse
+        .AddArg(objArg)
+        .AddArg(recordArg);
+
+    parse.ParseCommandLineArguments(argc, argv);
+
     RETCODE retcode = RTN_OK;
 
     Database test = Database();
-    DATABASE db = "test";
+    int record = 0;
 
-    retcode |= test.Open(db);
+    if( objArg.IsInUse() && recordArg.IsInUse() )
+    {
+        retcode |= test.Open(objArg.GetValue(0));
+        record = recordArg.GetValue(0);
+    }
+    else
+    {
+        return 1;
+    }
 
     if(RTN_OK == retcode )
     {
@@ -23,8 +53,15 @@ int main()
         return 1;
     }
 
-    O_TEST_1* testobj = test.GetObj<O_TEST_1>(db, 10);
-    strcpy(testobj->TEST_3 ,"abcd");
-    std::cout << "Got object RECORD: " << testobj->record
-                   << "\nTEST_3 value: " << testobj->TEST_3;
+    TEST* testobj = test.Get<TEST>(record);
+    if(nullptr != testobj)
+    {
+        strcpy(testobj->TEST_3 ,"test");
+        LOG_INFO("TEST[%d]->TEST_3: %s", record,  testobj->TEST_3);
+    }
+    else
+    {
+        std::cout << "Failed to get TEST object!\n";
+        return 1;
+    }
 }

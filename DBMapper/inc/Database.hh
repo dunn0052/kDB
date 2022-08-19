@@ -4,6 +4,8 @@
 #include <cstring>
 #include <string>
 #include <map>
+#include <iostream>
+#include <demangler.hh>
 
 struct MappedMemory
 {
@@ -18,21 +20,25 @@ class Database
         Database();
         ~Database();
 
-    char* Get(const DOFRI& dofri);
-    char* Get(const DATABASE, const OBJECT, const FIELD, const RECORD, const INDEX);
-
     template <typename OBJ_TYPE>
-    OBJ_TYPE* GetObj(const DATABASE d, const RECORD r)
+    OBJ_TYPE* Get(const RECORD r)
     {
-        char* p_database = GetDatabase(d);
-        return reinterpret_cast<OBJ_TYPE*>( p_database + sizeof(OBJ_TYPE) * r );
+        std::cout << type_name<OBJ_TYPE>() << "\n";
+
+        char* p_object_memory = GetObjectMem(type_name<OBJ_TYPE>().c_str());
+        if(nullptr != p_object_memory)
+        {
+            return reinterpret_cast<OBJ_TYPE*>(p_object_memory + sizeof(OBJ_TYPE) * r );
+        }
+
+        return nullptr;
     }
 
-    RETCODE Open(const DATABASE& databaseName);
-    RETCODE Close(const DATABASE& databaseName);
+    RETCODE Open(const OBJECT& objectName);
+    RETCODE Close(const OBJECT& objectName);
 
     private:
 
-        std::map<DATABASE, MappedMemory> m_DatabaseMaps;
-        char* GetDatabase(const DATABASE& databaseName);
+        std::map<OBJECT, MappedMemory> m_ObjectMemMap;
+        char* GetObjectMem(const OBJECT& databaseName);
 };
