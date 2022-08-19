@@ -3,7 +3,7 @@ project(DBMapper)
 set( SRC src )
 set( INC inc )
 
-include_directories( ${INC} ${INC}/../../common_inc)
+include_directories( ${INC} ${INC}/../../common_inc ${INC}/../../db/inc )
 
 
 set(CXXSRC ${SRC}/Database.cpp ${SRC}/main.cpp )

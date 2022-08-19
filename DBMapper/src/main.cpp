@@ -2,7 +2,7 @@
 #include <iostream>
 #include <fcntl.h>
 #include <string>
-#include <test.h>
+#include <test.hh>
 
 int main()
 {
@@ -17,9 +17,14 @@ int main()
     {
         std::cout << "Opened test successfully!\n";
     }
+    else
+    {
+        std::cout << "Failed to open db! Exiting.\n";
+        return 1;
+    }
 
-    O_TEST* testobj = test.GetObj<O_TEST>(db, 10);
+    O_TEST_1* testobj = test.GetObj<O_TEST_1>(db, 10);
     strcpy(testobj->TEST_3 ,"abcd");
-    std::cout << "Got object RECORD: " << testobj->rec
+    std::cout << "Got object RECORD: " << testobj->record
                    << "\nTEST_3 value: " << testobj->TEST_3;
 }

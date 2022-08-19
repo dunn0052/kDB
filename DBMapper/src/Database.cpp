@@ -6,7 +6,8 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <algorithm>
-#include <test.h>
+
+#include <allDBs.hh>
 
 Database::Database()
 {
@@ -22,9 +23,9 @@ inline int OpenDatabase(const DATABASE& databaseName)
 {
    std::stringstream filepath;
     // Get relative path
-    filepath << "./../files/" <<  databaseName << ".db";
+    filepath << "./db/" << databaseName << ".db";
     const std::string path = filepath.str();
-    int fd = open(path.c_str(), O_RDWR | O_CREAT, 0666);
+    int fd = open(path.c_str(), O_RDWR);
     return fd;
 }
 
@@ -52,7 +53,6 @@ RETCODE Database::Open(const DATABASE& databaseName)
         std::cout << "Failed to open: " << databaseName << "\n";
         retcode |= RTN_NOT_FOUND;;
     }
-    ftruncate64(fd, sizeof(O_TEST) * O_TEST_REC_NUM);
 
     struct stat statbuf;
     int error = fstat(fd, &statbuf);

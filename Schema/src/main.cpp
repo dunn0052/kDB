@@ -1,5 +1,16 @@
 #include <schema.hh>
 
+class CLI_DatabaseArgs : public CLI::CLI_Argument<DATABASE, 1, 1>
+{
+        using CLI_Argument::CLI_Argument;
+
+        bool TryConversion(const std::string& conversion, DATABASE& value)
+        {
+            value = conversion;
+            return true;
+        }
+};
+
 int main(int argc, char* argv[])
 {
 
@@ -13,9 +24,8 @@ int main(int argc, char* argv[])
 
     if( databaseArgs.IsInUse() )
     {
-        std::ifstream database;
         const DATABASE databaseName = databaseArgs.GetValue(0);
-        RETCODE retcode = LoadDatabase(databaseName, database);
+        RETCODE retcode = GenerateDatabase(databaseName);
     }
 
     if( sizeArg.IsInUse() )

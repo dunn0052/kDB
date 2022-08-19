@@ -34,9 +34,14 @@
 #CMAKE
 *.cmake
 build/
+debug/*
 CMakeCache.*
 Makefile
 CMakeFiles/
 
 #vscode
 .vscode/
+
+#database
+db/inc/*
+db/db/*

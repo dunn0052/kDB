@@ -97,7 +97,7 @@ namespace CLI
 
                 if(m_IsRequired)
                 {
-                    os << Color::Modifier(Color::FG_RED) << " (Required)" << Color::Modifier(Color::FG_DEFAULT);
+                    os << TextMod::Modifier(TextMod::FG_RED) << " (Required)" << TextMod::Modifier(TextMod::FG_DEFAULT);
                 }
 
                 os << "]: ";
@@ -251,7 +251,7 @@ namespace CLI
             friend std::ostream&
             operator << (std::ostream& os, const Parser& parser)
             {
-                os << Color::Modifier(Color::FG_DEFAULT) << parser.m_Name <<": " << parser.m_Description << std::endl;
+                os << TextMod::Modifier(TextMod::FG_DEFAULT) << parser.m_Name <<": " << parser.m_Description << std::endl;
 
                 std::map<std::string, CLI_Argument_Interface*>::const_iterator arg;
                 for(arg = parser.m_Arguments.begin(); arg != parser.m_Arguments.end(); arg++)
