@@ -168,8 +168,6 @@ static RETCODE  GenerateDatabaseFile(OBJECT_SCHEMA& object_entry, const std::str
         retcode |= RTN_MALLOC_FAIL;
     }
 
-    LOG_DEBUG("Truncated %s to size %u", path.c_str(), fileSize);
-
     if( close(fd) )
     {
         LOG_WARN("Failed to close %s", path.c_str());
@@ -234,7 +232,6 @@ RETCODE GenerateObjectDBFiles(const OBJECT& objectName)
     while( std::getline(schemaFile, line) )
     {
         currentLineNum++;
-        LOG_INFO("%s", line.c_str());
         firstNonEmptyChar = line.find_first_not_of(' ');
         firstChar = line.at(firstNonEmptyChar);
 
@@ -298,7 +295,14 @@ RETCODE GenerateObjectDBFiles(const OBJECT& objectName)
     schemaFile.close();
     headerFile.close();
 
+    LOG_INFO("Genrated %s.hh", object_entry.objectName.c_str());
+
+
     retcode |= GenerateDatabaseFile(object_entry, objectName);
+    if( RTN_OK == retcode )
+    {
+            LOG_INFO("Generated %s.db", object_entry.objectName.c_str());
+    }
 
     return retcode;
 }
