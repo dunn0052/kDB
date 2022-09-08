@@ -2,9 +2,12 @@
 #define PRINT_COLOR_HH
 
 #include <sstream>
-namespace Color
+#include <algorithm>
+#include <cstring>
+
+namespace TextMod
 {
-    enum Code
+    enum ColorCode
     {
         FG_RED      = 31,
         FG_GREEN    = 32,
@@ -20,19 +23,20 @@ namespace Color
 
     class Modifier
     {
-        Code m_Code;
+        ColorCode m_ColorCode;
     public:
 
-        Modifier(Code code)
-            : m_Code(code)
+        Modifier(ColorCode code)
+            : m_ColorCode(code)
             {}
 
         friend std::ostream&
         operator<<(std::ostream& os, const Modifier& mod)
         {
-            return os << "\033[" << mod.m_Code << "m";
+            return os << "\033[" << mod.m_ColorCode << "m";
         }
     };
+
 }
 
 #endif

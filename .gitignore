@@ -30,10 +30,14 @@
 *.exe
 *.out
 *.app
+bin/*
 
 #CMAKE
 *.cmake
 build/
+debug/
+bin/
+lib/
 CMakeCache.*
 Makefile
 CMakeFiles/
@@ -41,3 +45,15 @@ debug/
 
 #vscode
 .vscode/
+
+#database
+db/inc/*
+db/db/*
+*.db
+
+#temp
+Talker/
+Listener/
+MessageLib/
+Message.hh
+SocketNames.hh

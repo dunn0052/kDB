@@ -1,9 +1,8 @@
 project(CLI)
 
 set( SRC src )
-set( INC inc )
 
-include_directories( ${INC} ${INC}/../../common_inc ${INC}/../../Logger/inc)
+include_directories( ${COMMON_INCLUDE} )
 
 
 set(CXXSRC ${SRC}/main.cpp )

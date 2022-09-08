@@ -5,11 +5,11 @@
 
 namespace Log
 {
-    const Color::Modifier Logger::TEXT_COLOR_BLUE(Color::Code::FG_BLUE);
-    const Color::Modifier Logger::TEXT_COLOR_GREEN(Color::Code::FG_GREEN);
-    const Color::Modifier Logger::TEXT_COLOR_YELLOW(Color::Code::FG_YELLOW);
-    const Color::Modifier Logger::TEXT_COLOR_RED(Color::Code::FG_RED);
-    const Color::Modifier Logger::TEXT_COLOR_DEFAULT(Color::Code::FG_DEFAULT);
+    const TextMod::Modifier Logger::TEXT_COLOR_BLUE(TextMod::ColorCode::FG_BLUE);
+    const TextMod::Modifier Logger::TEXT_COLOR_GREEN(TextMod::ColorCode::FG_GREEN);
+    const TextMod::Modifier Logger::TEXT_COLOR_YELLOW(TextMod::ColorCode::FG_YELLOW);
+    const TextMod::Modifier Logger::TEXT_COLOR_RED(TextMod::ColorCode::FG_RED);
+    const TextMod::Modifier Logger::TEXT_COLOR_DEFAULT(TextMod::ColorCode::FG_DEFAULT);
 
     Logger& Logger::Instance(void)
     {
@@ -59,7 +59,11 @@ namespace Log
             }
         }
 
-        std::cout << TEXT_COLOR << "[" << debugLevel << "][" << fileName << " " << lineNum << "] ";
+        std::cout << TEXT_COLOR << "[" << debugLevel << "]";
+ #ifdef _LOG_SHOW_LINE
+                std::cout << "[" << fileName << ":" << lineNum << "]";
+ #endif
+        std::cout << " ";
         char* s_Message = NULL;
         int nLength = 0;
         va_list args;
@@ -73,5 +77,10 @@ namespace Log
         va_end(args);
 
         delete[] s_Message;
+    }
+
+    Logger::~Logger()
+    {
+        std::cout << TEXT_COLOR_DEFAULT;
     }
 }
