@@ -84,6 +84,7 @@ RETCODE Database::Open(const OBJECT& objectName)
     return retcode;
 }
 
+
 RETCODE Database::Close(const OBJECT& objectName)
 {
     int error = 0;
@@ -113,6 +114,17 @@ char* Database::GetObjectMem(const OBJECT& objectName)
     if( mapIterator != m_ObjectMemMap.end() )
     {
         return mapIterator->second.p_mapped;
+    }
+    else
+    {
+        // Attempt to open object
+        RETCODE retcode = Open(objectName);
+        if( RTN_OK == retcode )
+        {
+            // Hopefully we don't get some weird recursive bs
+            // But after opening the object should be mapped
+            return GetObjectMem(objectName);
+        }
     }
 
     return nullptr;

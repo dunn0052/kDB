@@ -1,6 +1,7 @@
 #include <schema.hh>
 #include <fcntl.h>
 #include <unistd.h>
+#include <compiler_defines.hh>
 
 RETCODE ParseObjectEntry(std::istringstream& line, OBJECT_SCHEMA& out_object)
 {
@@ -48,9 +49,10 @@ static RETCODE GenerateObjectHeader(OBJECT_SCHEMA& object, std::ofstream& header
 
 static bool generateDataType(FIELD_SCHEMA& field, std::string& dataType)
 {
+    // Sizings are not accurate because of struct padding
     switch(field.fieldType)
     {
-        case 'D': // Databse
+        case 'D': // Databse innacurate because its a string alias
         {
             dataType = "DATABASE";
             field.fieldSize = sizeof(DATABASE);
@@ -177,6 +179,90 @@ static RETCODE  GenerateDatabaseFile(OBJECT_SCHEMA& object_entry, const std::str
     return retcode;
 }
 
+static RETCODE readAllDBHeader(OBJECT_SCHEMA& object_entry, std::vector<std::string>& out_lines)
+{
+    std::string line;
+    bool entry_replaced = false;
+    size_t lineNum = 1;
+    std::ifstream headerStream;
+    headerStream.open("./common_inc/allDBs.hh");
+
+    if( !headerStream.is_open() )
+    {
+        return RTN_NOT_FOUND;
+    }
+
+    // Update entry
+    while( std::getline(headerStream, line) )
+    {
+        if( object_entry.objectNumber == lineNum )
+        {
+            line = "#include <" + object_entry.objectName + ".hh>";
+            entry_replaced = true;
+        }
+        out_lines.push_back(line);
+        lineNum++;
+    }
+
+    // New entry that extends the number of lines in the header
+    if( !entry_replaced )
+    {
+        for(; lineNum != object_entry.objectNumber; ++lineNum)
+        {
+            out_lines.push_back("");
+        }
+
+        out_lines.push_back("#include <" +  object_entry.objectName + ".hh>");
+    }
+
+    headerStream.close();
+
+    return RTN_OK;
+}
+
+static RETCODE writeAllDBHeader(std::vector<std::string>& out_lines)
+{
+    std::ofstream headerStream;
+    headerStream.open("./common_inc/allDBs.hh");
+
+    if( !headerStream.is_open() )
+    {
+        return RTN_NOT_FOUND;
+    }
+
+    for( std::string& line : out_lines)
+    {
+        headerStream << line << "\n";
+    }
+
+    headerStream.close();
+
+    return RTN_OK;
+}
+
+
+static RETCODE AddToAllDBHeader(OBJECT_SCHEMA& object_entry)
+{
+    std::vector<std::string> out_lines;
+    RETCODE retcode = RTN_OK;
+
+    retcode = readAllDBHeader(object_entry, out_lines);
+    if(RTN_OK != retcode)
+    {
+        LOG_WARN("Could not open up allDBs.hh for reading!");
+        return retcode;
+    }
+
+    retcode = writeAllDBHeader(out_lines);
+    if(RTN_OK != retcode)
+    {
+        LOG_WARN("Could not open up allDBs.hh for writing")
+        return retcode;
+    }
+
+    return retcode;
+}
+
 /*
  * Database syntax:
  * Line by line
@@ -297,8 +383,9 @@ RETCODE GenerateObjectDBFiles(const OBJECT& objectName)
 
     LOG_INFO("Genrated %s.hh", object_entry.objectName.c_str());
 
+    retcode |= AddToAllDBHeader(object_entry);
 
-    retcode |= GenerateDatabaseFile(object_entry, objectName);
+    //retcode |= GenerateDatabaseFile(object_entry, objectName);
     if( RTN_OK == retcode )
     {
             LOG_INFO("Generated %s.db", object_entry.objectName.c_str());
