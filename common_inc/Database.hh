@@ -22,49 +22,66 @@ class Database
         Database();
         ~Database();
 
-    template <typename OBJ_TYPE>
-    OBJ_TYPE* Get(const RECORD record)
-    {
-        char* p_object_memory = GetObjectMem(type_name<OBJ_TYPE>().c_str());
-        if(nullptr != p_object_memory)
+        template <typename OBJ_TYPE>
+        OBJ_TYPE* Get(const RECORD record)
         {
-            return reinterpret_cast<OBJ_TYPE*>(p_object_memory + sizeof(OBJ_TYPE) * record );
+            char* p_object_memory = GetObjectMem(type_name<OBJ_TYPE>().c_str());
+            if(nullptr != p_object_memory)
+            {
+                return reinterpret_cast<OBJ_TYPE*>(p_object_memory + sizeof(OBJ_TYPE) * record );
+            }
+
+            return nullptr;
         }
 
-        return nullptr;
-    }
+        template<typename OBJ_TYPE>
+        RETCODE ResizeObject(const RECORD numRecords)
+        {
+            RETCODE retcode = RTN_OK;
+            std::stringstream filepath;
+            filepath << "./db/"; /* <<  type_name<OBJ_TYPE>() << ".db";*/
+            const std::string path = filepath.str();
+            size_t fileSize = sizeof(OBJ_TYPE) * numRecords;
 
-template<typename OBJ_TYPE>
-RETCODE ResizeObject(const RECORD numRecords)
-{
-    RETCODE retcode = RTN_OK;
-    std::stringstream filepath;
-    filepath << "./db/"; /* <<  type_name<OBJ_TYPE>() << ".db";*/
-    const std::string path = filepath.str();
-    size_t fileSize = sizeof(OBJ_TYPE) * numRecords;
+            int fd = open(path.c_str(), O_RDWR | O_CREAT, 0666);
+            if( 0 > fd )
+            {
+                return  RTN_NOT_FOUND;
+            }
 
-    int fd = open(path.c_str(), O_RDWR | O_CREAT, 0666);
-    if( 0 > fd )
-    {
-        return  RTN_NOT_FOUND;
-    }
+            if( ftruncate64(fd, fileSize) )
+            {
+                retcode |= RTN_MALLOC_FAIL;
+            }
 
-    if( ftruncate64(fd, fileSize) )
-    {
-        retcode |= RTN_MALLOC_FAIL;
-    }
+            if( close(fd) )
+            {
+                retcode |= RTN_FAIL;
+            }
 
-    if( close(fd) )
-    {
-        retcode |= RTN_FAIL;
-    }
-
-    return retcode;
-}
+            return retcode;
+        }
 
 
-    RETCODE Open(const OBJECT& objectName);
-    RETCODE Close(const OBJECT& objectName);
+        RETCODE Open(const OBJECT& objectName);
+        RETCODE Close(const OBJECT& objectName);
+
+        template <typename ObjectType>
+        RETCODE UpdateRecord(const ObjectType& update, const size_t&& record)
+        {
+            ObjectType* object = Get<ObjectType>(record);
+            if(NULL != object)
+            {
+                memcpy(object, &update);
+                //notify<ObjectType>(record);
+                return RTN_OK;
+            }
+
+            return RTN_NOT_FOUND;
+        }
+
+        template <typename ObjectType>
+        RETCODE Subscribe();
 
     private:
 

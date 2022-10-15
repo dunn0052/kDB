@@ -13,6 +13,7 @@ add_subdirectory(Logger)
 add_subdirectory(CLI)
 add_subdirectory(Schema)
 add_subdirectory(DBMapper)
-#add_subdirectory(Talker)
+add_subdirectory(MessageLib)
+add_subdirectory(Talker)
 #add_subdirectory(Listener)
 

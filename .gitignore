@@ -50,10 +50,3 @@ debug/
 db/inc/*
 db/db/*
 *.db
-
-#temp
-Talker/
-Listener/
-MessageLib/
-Message.hh
-SocketNames.hh
