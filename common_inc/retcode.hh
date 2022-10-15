@@ -21,6 +21,8 @@
 	// Could not find object
 	constexpr RETCODE RTN_NOT_FOUND = 0x0008;
 
+	constexpr RETCODE RTN_CONNECTION_FAIL = 0x0010;
+
 	#define IS_RETCODE_OK( RET ) (RTN_OK == RET)
 
 	#define RETURN_RETCODE_IF_NOT_OK( RET ) \

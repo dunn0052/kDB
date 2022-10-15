@@ -36,6 +36,7 @@ public:
     RETCODE Send(const SOCKET_NAME& name, const MESSAGE_HEADER& message)
     {
         msgsnd(m_MessageID, &message, message.size + sizeof(MESSAGE_HEADER), 0);
+        return RTN_FAIL;
     }
 
     RETCODE Recieve(MESSAGE_HEADER& message)
@@ -43,6 +44,7 @@ public:
         char* body = NULL;
         msgrcv(m_MessageID, &message, sizeof(MESSAGE_HEADER), 1, 0);
         msgrcv(m_MessageID, body, message.size, 1, 0);
+        return RTN_FAIL;
     }
 
 private:

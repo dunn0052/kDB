@@ -1,8 +1,9 @@
-#include <Database.hh>
+//#include <Database.hh>
+#include <unistd.h>
 #include <iostream>
 #include <fcntl.h>
 #include <string>
-#include <TEST.hh>
+//#include <TEST.hh>
 
 #include <CLI.hh>
 #include <INETMessenger.hh>
@@ -20,17 +21,26 @@ class CLI_ObjectArgs : public CLI::CLI_Argument<OBJECT, 1, 1>
 
 int main(int argc, char* argv[])
 {
-    CLI::Parser parse("Database Mapper", "Read mapped objects");
+    CLI::Parser parse("Talker", "Send DB Updates");
+    CLI::CLI_StringArgument portArg("-p", "Port to connect to Talker (this process)", true);
+    CLI::CLI_IntArgument waitTimeArg("-w", "How long to wait for a connection", true);
+    #if 0
     CLI_ObjectArgs objArg("--object", "Name of object", true);
     CLI::CLI_IntArgument recordArg("-r", "Object record", true);
     parse
         .AddArg(objArg)
         .AddArg(recordArg);
+    #endif
 
-    parse.ParseCommandLineArguments(argc, argv);
+    parse
+        .AddArg(waitTimeArg)
+        .AddArg(portArg);
 
-    RETCODE retcode = RTN_OK;
+    RETCODE parseRetcode = parse.ParseCommandLineArguments(argc, argv);
+    std::cout << waitTimeArg.GetValue() << " " << portArg.GetValue() << "\n";
 
+
+    #if 0
     Database test = Database();
     int record = 0;
 
@@ -65,9 +75,17 @@ int main(int argc, char* argv[])
         std::cout << "Failed to get TEST object!\n";
         return 1;
     }
+    #endif
 
-    INETMessenger comms("1234");
-    retcode |= comms.Listen();
+    if(RTN_OK == parseRetcode)
+    {
+        INETMessenger comms(std::move(portArg.GetValue()));
+        LOG_INFO("Accepting on %s:%s", comms.GetAddress().c_str(), comms.GetPort().c_str());
+        parseRetcode |= comms.Listen();
 
-    return retcode;
+        sleep(waitTimeArg.GetValue());
+    }
+
+
+    return RTN_FAIL;
 }
