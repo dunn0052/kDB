@@ -37,8 +37,6 @@ int main(int argc, char* argv[])
         .AddArg(portArg);
 
     RETCODE parseRetcode = parse.ParseCommandLineArguments(argc, argv);
-    std::cout << waitTimeArg.GetValue() << " " << portArg.GetValue() << "\n";
-
 
     #if 0
     Database test = Database();
@@ -83,7 +81,14 @@ int main(int argc, char* argv[])
         LOG_INFO("Accepting on %s:%s", comms.GetAddress().c_str(), comms.GetPort().c_str());
         parseRetcode |= comms.Listen();
 
-        sleep(waitTimeArg.GetValue());
+        std::string user_input;
+        for(int i = waitTimeArg.GetValue(); i > 0; i--)
+        {
+            comms.GetAcceptedUsers();
+            std::cin >> user_input;
+            comms.SendToAll(user_input);
+
+        }
     }
 
 

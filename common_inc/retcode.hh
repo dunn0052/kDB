@@ -21,7 +21,11 @@
 	// Could not find object
 	constexpr RETCODE RTN_NOT_FOUND = 0x0008;
 
+	// Problem with network connection
 	constexpr RETCODE RTN_CONNECTION_FAIL = 0x0010;
+
+	// End of File
+	constexpr RETCODE RTN_EOF = 0x0020;
 
 	#define IS_RETCODE_OK( RET ) (RTN_OK == RET)
 

@@ -28,19 +28,31 @@ int main(int argc, char* argv[])
 
     if(RTN_OK == parseRetcode)
     {
-        std::string listenPort = "5000";
-        if(listenAddressArg.IsInUse())
-        {
-            listenPort = listenAddressArg.GetValue();
-        }
-
         INETMessenger connection{};
         RETCODE retcode = connection.Connect(conenctionAddressArg.GetValue(),
                            connectionPortArg.GetValue());
 
         if(RTN_OK == retcode)
         {
-            LOG_INFO("Connected to %s:%s", connection.GetConnectedAddress().c_str(), connectionPortArg.GetValue().c_str());
+            LOG_INFO("Connected to %s:%s with socket %d", connection.GetConnectedAddress().c_str(), connectionPortArg.GetValue().c_str(), connection.GetConnectionSocket());
+            char buffer[1000];
+            bool connected = true;
+            while(connected)
+            {
+                retcode = connection.Recieve(connection.GetConnectionSocket(), buffer, 999);
+                if(RTN_OK != retcode)
+                {
+                    LOG_WARN("Connection closed!");
+                    connected = false;
+                    continue;
+                }
+                buffer[1000] = '\0';
+                LOG_INFO("%s", buffer);
+                memset(buffer, 0, sizeof(buffer));
+                usleep(100);
+            }
+
+            LOG_INFO("Done listening!\n");
         }
         else
         {
