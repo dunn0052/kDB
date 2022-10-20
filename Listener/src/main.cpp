@@ -2,6 +2,7 @@
 #include <INETMessenger.hh>
 #include <retcode.hh>
 #include <Logger.hh>
+#include <DatabaseSubscription.hh>
 
 int main(int argc, char* argv[])
 {

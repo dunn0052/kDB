@@ -104,7 +104,7 @@ public:
         : m_Ready(false), m_CanAccept(false), m_IsListening(false), m_IsAccepting(false),
           m_AcceptingPort(portNumber), m_AcceptingAddress(),
           m_ListeningSocket(-1), m_ConnectionAddress(), m_ConnectionSocket(-1),
-          m_AcceptTask(), m_AcceptedConnections(),
+          m_ReadyForReceive(false), m_AcceptTask(), m_AcceptedConnections(),
           m_AcceptSocketsQueue()
     {
         if(m_AcceptingPort.empty())
@@ -322,6 +322,11 @@ public:
         return retcode;
     }
 
+    RETCODE Recieve(char buffer[], int buffer_length)
+    {
+        return Recieve(m_ConnectionSocket, buffer, buffer_length);
+    }
+
     RETCODE Recieve(int socket, char buffer[], int buffer_length)
     {
         int bytes_received = recv(socket, buffer, buffer_length, 0);
@@ -343,15 +348,14 @@ public:
         ACKNOWLEDGE ack{0};
         int bytes_received = recv(socket, static_cast<void*>(&ack), sizeof(ack), 0);
 
-        if(sizeof(ack) != bytes_received)
+        if(sizeof(ack) != bytes_received ||
+           _SERVER_VERSION != ack.server_version )
         {
+            m_ReadyForReceive = false;
             return RTN_CONNECTION_FAIL;
         }
 
-        if(_SERVER_VERSION != ack.server_version)
-        {
-            return RTN_CONNECTION_FAIL;
-        }
+        m_ReadyForReceive = true;
 
         return RTN_OK;
     }
@@ -391,6 +395,11 @@ public:
         return m_ConnectionSocket;
     }
 
+    inline bool IsListening(void)
+    {
+        return m_IsListening;
+    }
+
 private:
     bool m_Ready;
     bool m_CanAccept;
@@ -398,11 +407,11 @@ private:
     bool m_IsAccepting;
     std::string m_AcceptingPort;
     std::string m_AcceptingAddress;
-    //std::thread m_AcceptThread;
     AcceptThread m_AcceptTask;
     int m_ListeningSocket;
     std::string m_ConnectionAddress;
     int m_ConnectionSocket;
+    bool m_ReadyForReceive;
     std::vector<struct sockaddr> m_AcceptedConnections;
     std::queue<int> m_AcceptSocketsQueue;
     std::vector<int> m_AcceptSockets;

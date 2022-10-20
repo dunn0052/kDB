@@ -7,7 +7,10 @@
 #include <sys/stat.h>
 #include <algorithm>
 
+#include <INETMessenger.hh>
+
 #include <allDBs.hh>
+
 
 Database::Database()
 {
