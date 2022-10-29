@@ -39,7 +39,7 @@ public:
         return RTN_FAIL;
     }
 
-    RETCODE Recieve(MESSAGE_HEADER& message)
+    RETCODE Receive(MESSAGE_HEADER& message)
     {
         char* body = NULL;
         msgrcv(m_MessageID, &message, sizeof(MESSAGE_HEADER), 1, 0);

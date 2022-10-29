@@ -274,7 +274,7 @@ public:
         int rv;
         char s[INET6_ADDRSTRLEN];
 
-        memset(&hints, 0, sizeof hints);
+        memset(&hints, 0, sizeof(hints));
         hints.ai_family = AF_UNSPEC;
         hints.ai_socktype = SOCK_STREAM;
         hints.ai_flags = AI_PASSIVE;
@@ -284,7 +284,7 @@ public:
             return RTN_NOT_FOUND;
         }
 
-        // loop through all the results and connect to the first we can
+        // loop through all the results and connect to the first good one
         for(currentAddrInfo = returnedAddrInfo; currentAddrInfo != NULL; currentAddrInfo = currentAddrInfo->ai_next) {
             if ((m_ConnectionSocket = socket(currentAddrInfo->ai_family, currentAddrInfo->ai_socktype,
                     currentAddrInfo->ai_protocol)) == -1) {
@@ -315,19 +315,19 @@ public:
 
         freeaddrinfo(returnedAddrInfo);
 
-        RETCODE retcode = RecieveAck(m_ConnectionSocket);
+        RETCODE retcode = ReceiveAck(m_ConnectionSocket);
 
         m_IsListening = RTN_OK == retcode;
 
         return retcode;
     }
 
-    RETCODE Recieve(char buffer[], int buffer_length)
+    RETCODE Receive(char buffer[], int buffer_length)
     {
-        return Recieve(m_ConnectionSocket, buffer, buffer_length);
+        return Receive(m_ConnectionSocket, buffer, buffer_length);
     }
 
-    RETCODE Recieve(int socket, char buffer[], int buffer_length)
+    RETCODE Receive(int socket, char buffer[], int buffer_length)
     {
         int bytes_received = recv(socket, buffer, buffer_length, 0);
 
@@ -343,7 +343,7 @@ public:
         return RTN_OK;
     }
 
-    RETCODE RecieveAck(int socket)
+    RETCODE ReceiveAck(int socket)
     {
         ACKNOWLEDGE ack{0};
         int bytes_received = recv(socket, static_cast<void*>(&ack), sizeof(ack), 0);

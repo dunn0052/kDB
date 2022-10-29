@@ -40,7 +40,7 @@ int main(int argc, char* argv[])
             bool connected = true;
             while(connected)
             {
-                retcode = connection.Recieve(connection.GetConnectionSocket(), buffer, 999);
+                retcode = connection.Receive(connection.GetConnectionSocket(), buffer, 999);
                 if(RTN_OK != retcode)
                 {
                     LOG_WARN("Connection closed!");

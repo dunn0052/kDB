@@ -37,7 +37,7 @@ public:
         msgsnd(m_MessageID, &message, message.size + sizeof(MESSAGE_HEADER), 0);
     }
 
-    RETCODE Recieve(MESSAGE_HEADER& message)
+    RETCODE Receive(MESSAGE_HEADER& message)
     {
         char* body = NULL;
         msgrcv(m_MessageID, &message, sizeof(MESSAGE_HEADER), 1, 0);
