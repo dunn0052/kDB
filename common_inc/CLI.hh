@@ -12,7 +12,8 @@
 namespace CLI
 {
 
-/* USAGE:
+/* USAGE: template CUSTOM_TYPE and create a TryConversion()
+ * that takes in a string and converts it to a CUSTOM_TYPE object
  *
  */
 

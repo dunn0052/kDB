@@ -16,4 +16,5 @@ add_subdirectory(DBMapper)
 #add_subdirectory(MessageLib)
 add_subdirectory(Talker)
 add_subdirectory(Listener)
+add_subdirectory(dbcli)
 
