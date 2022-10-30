@@ -39,7 +39,7 @@ end
 function cmake.cfgname(cfg)
     local cfgname = cfg.buildcfg
     if cmake.workspace.multiplePlatforms then
-        -- CMake breaks if "|" is used here as well as -
+        -- CMake build types must be any of ^[^A-Za-z0-9_]+ regex
         cfgname = string.format("%s_%s", cfg.platform, cfg.buildcfg)
     end
     return cfgname
