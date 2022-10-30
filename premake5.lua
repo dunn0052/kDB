@@ -1,4 +1,7 @@
 workspace "DB"
+
+    require "cmake"
+
     platforms
     {
         "rpi",
@@ -14,7 +17,8 @@ workspace "DB"
 
 outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 projectsrc = "%{prj.name}/src/**.cpp"
-projectinc ="%{prj.name}/inc/"
+projectinc ="%{prj.name}/inc/*.hh" -- private headers
+projincpath ="%{prj.name}/inc/" -- private header path
 commoninc = "common_inc/"
 targetbuilddir = "bin/" .. outputdir .. "/%{prj.name}"
 intermediatedir = "bin-intermediates/" ..outputdir .. "/%{prj.name}"
@@ -30,12 +34,13 @@ project "Logger"
 
     files
     {
-        projectsrc
+        projectsrc,
+        projectinc
     }
 
     includedirs
     {
-        projectinc,
+        projincpath,
         commoninc
     }
 
