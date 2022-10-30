@@ -30,9 +30,10 @@
 *.exe
 *.out
 *.app
-bin/
+bin*/
 release/
 debug/
+lib/
 
 #CMAKE
 *.cmake
@@ -41,9 +42,13 @@ debug/*
 CMakeCache.*
 Makefile
 CMakeFiles/
+CMakeLists.*
 
 #vscode
 .vscode/
+
+#vs
+.vs/
 
 #database
 db/inc/*
