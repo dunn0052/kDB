@@ -40,6 +40,7 @@ namespace CLI
         public:
             virtual bool AddValue(std::string& cli_argument) = 0;
             virtual std::string Option() = 0;
+            virtual void AddOption(const std::string& option) = 0;
             virtual void InUse() = 0;
             virtual bool IsInUse() = 0;
             virtual bool IsRequired() = 0;
@@ -60,7 +61,7 @@ namespace CLI
     {
         public:
             CLI_Argument(const std::string& option, const std::string& desc = "", bool required = false)
-                : m_Option(option), m_Description(desc), m_InUse(false), m_IsRequired(required),
+                : m_Option(option), m_Options(), m_Description(desc), m_InUse(false), m_IsRequired(required),
                   m_MinRequiredValues(MinRequiredValues), m_MaxRequiredValues(MaxRequiredValues)
                 { };
 
@@ -91,13 +92,19 @@ namespace CLI
                 }
             }
 
+            virtual void AddOption(const std::string& option)
+            {
+                m_Options.push_back(option);
+            }
+
             virtual void print(std::ostream& os) const
             {
                 os << "[" << m_Option;
 
                 if(m_IsRequired)
                 {
-                    os << TextMod::Modifier(TextMod::FG_RED) << " (Required)" << TextMod::Modifier(TextMod::FG_DEFAULT);
+                    os << TextMod::Modifier(TextMod::FG_RED) << " (Required)"
+                       << TextMod::Modifier(TextMod::FG_DEFAULT);
                 }
 
                 os << "]: ";
@@ -105,7 +112,7 @@ namespace CLI
                 os << m_Description;
             }
 
-            const ArgType& GetValue(size_t index)
+            const ArgType& GetValue(size_t index = 0)
             {
                 return m_Values.at(index);
             }
@@ -115,6 +122,7 @@ namespace CLI
 
         protected:
             std::string m_Option;
+            std::vector<std::string> m_Options;
             std::string m_Description;
             bool m_InUse;
             bool m_IsRequired;
@@ -162,6 +170,17 @@ namespace CLI
         }
     };
 
+    class CLI_StringArgument: public CLI_Argument<std::string, 1, 1>
+    {
+        using CLI_Argument::CLI_Argument;
+
+        bool TryConversion(const std::string& conversion, std::string& value)
+        {
+            value = conversion;
+            m_InUse = true;
+            return true;
+        }
+    };
 
     class Parser
     {

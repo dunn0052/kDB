@@ -256,7 +256,7 @@ static RETCODE AddToAllDBHeader(OBJECT_SCHEMA& object_entry)
     retcode = writeAllDBHeader(out_lines);
     if(RTN_OK != retcode)
     {
-        LOG_WARN("Could not open up allDBs.hh for writing")
+        LOG_WARN("Could not open up allDBs.hh for writing");
         return retcode;
     }
 
