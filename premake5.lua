@@ -18,13 +18,16 @@ workspace "DB"
         "Distribution" -- opt w/o logging (fastest)
     }
 
+-- PATH MACROS
 outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 projectsrc = "%{prj.name}/src/**.cpp"
 projectinc ="%{prj.name}/inc/*.hh" -- private headers
 projincpath ="%{prj.name}/inc/" -- private header path
 commoninc = "common_inc/"
 targetbuilddir = "bin/" .. outputdir .. "/%{prj.name}"
+sharedbuildlibs = "bin/" .. outputdir .. "/lib/"
 intermediatedir = "bin-intermediates/" ..outputdir .. "/%{prj.name}"
+dbincdir = "db/inc/"
 
 project "Logger"
 
@@ -32,7 +35,7 @@ project "Logger"
     kind "SharedLib"
     language "C++"
 
-    targetdir(targetbuilddir)
+    targetdir(sharedbuildlibs)
     objdir(intermediatedir)
 
     files
@@ -64,8 +67,152 @@ project "Logger"
     }
 ]]
 
+project "CLI"
+
+    location "CLI"
+    kind "ConsoleApp"
+    language "C++"
+
+    targetdir(targetbuilddir)
+    objdir(intermediatedir)
+    libdirs(sharedbuildlibs)
+
+    files
+    {
+        projectsrc,
+        projectinc
+    }
+
+    includedirs
+    {
+        commoninc,
+        projincpath,
+        dbincdir
+    }
+
+    cppdialect "C++17"
+    systemversion "latest" -- compiler version
+
+    links
+    {
+        "Logger"
+    }
+
+    defines
+    {
+
+    }
+
+project "Schema"
+
+    location "Schema"
+    kind "ConsoleApp"
+    language "C++"
+
+    targetdir(targetbuilddir)
+    objdir(intermediatedir)
+    libdirs(sharedbuildlibs)
+
+    files
+    {
+        projectsrc,
+        projectinc
+    }
+
+    includedirs
+    {
+        commoninc,
+        projincpath
+    }
+
+    cppdialect "C++17"
+    systemversion "latest" -- compiler version
+
+    links
+    {
+        "Logger"
+    }
+
+    defines
+    {
+
+    }
+
+project "DBMapper"
+
+    location "DBMapper"
+    kind "SharedLib"
+    language "C++"
+
+    targetdir(sharedbuildlibs)
+    objdir(intermediatedir)
+    libdirs(sharedbuildlibs)
+
+    files
+    {
+        projectsrc,
+        projectinc
+    }
+
+    includedirs
+    {
+        commoninc,
+        projincpath,
+        dbincdir
+    }
+
+    cppdialect "C++17"
+    systemversion "latest" -- compiler version
+
+    links
+    {
+        "Logger"
+    }
+
+    defines
+    {
+
+    }
+
+project "Talker"
+
+    location "Talker"
+    kind "ConsoleApp"
+    language "C++"
+    cppdialect "C++17"
+    systemversion "latest" -- compiler version
+
+    targetdir(targetbuilddir)
+    objdir(intermediatedir)
+    libdirs(sharedbuildlibs)
+
+    files
+    {
+        projectsrc,
+        projectinc
+    }
+
+    includedirs
+    {
+        commoninc,
+        projincpath
+    }
+
+
+    links
+    {
+        "Logger",
+        "DBMapper",
+        "Threads::Threads"
+    }
+
+
+    defines
+    {
+    }
+
 filter "configurations:Debug"
-    --defines "LOGGING_DEFINES??"
+    defines "_ENABLE_LOGGING"
     symbols "On"
 
 filter "configurations:Release"
@@ -82,5 +229,11 @@ filter "configurations:Distribution"
 filter "platforms:rpi"
     architecture "arm64"
 
+filter "platforms:Linux"
+    architecture "x64"
+
 filter "platforms:Windows"
     architecture "x64"
+
+    includedirs(commoninc)
+    libdirs(sharedbuildlibs)

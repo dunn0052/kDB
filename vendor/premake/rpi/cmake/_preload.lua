@@ -15,43 +15,43 @@ local p = premake
 
 -- support cmake executable_suffix
 p.api.register {
-	name = "executable_suffix",
-	scope = "config",
-	kind = "string",
+    name = "executable_suffix",
+    scope = "config",
+    kind = "string",
 }
 
 newaction
 {
-	-- Metadata for the command line and help system
+    -- Metadata for the command line and help system
 
-	trigger         = "cmake",
-	shortname       = "CMake",
-	description     = "Generate CMake file",
-	toolset         = "clang",
+    trigger         = "cmake",
+    shortname       = "CMake",
+    description     = "Generate CMake file",
+    toolset         = "clang",
 
-	-- The capabilities of this action
+    -- The capabilities of this action
 
-	valid_kinds     = { "ConsoleApp", "WindowedApp", "Makefile", "SharedLib", "StaticLib", "Utility" },
-	valid_languages = { "C", "C++" },
-	valid_tools     = {
-		cc = { "gcc", "clang", "msc" }
-	},
+    valid_kinds     = { "ConsoleApp", "WindowedApp", "Makefile", "SharedLib", "StaticLib", "Utility" },
+    valid_languages = { "C", "C++" },
+    valid_tools     = {
+        cc = { "gcc", "clang", "msc" }
+    },
 
-	-- Workspace and project generation logic
+    -- Workspace and project generation logic
 
-	onWorkspace = function(wks)
-		p.modules.cmake.generateWorkspace(wks)
-	end,
-	onProject = function(prj)
-		p.modules.cmake.generateProject(prj)
-	end,
+    onWorkspace = function(wks)
+        p.modules.cmake.generateWorkspace(wks)
+    end,
+    onProject = function(prj)
+        p.modules.cmake.generateProject(prj)
+    end,
 
-	onCleanWorkspace = function(wks)
-		p.modules.cmake.cleanWorkspace(wks)
-	end,
-	onCleanProject = function(prj)
-		p.modules.cmake.cleanProject(prj)
-	end,
+    onCleanWorkspace = function(wks)
+        p.modules.cmake.cleanWorkspace(wks)
+    end,
+    onCleanProject = function(prj)
+        p.modules.cmake.cleanProject(prj)
+    end,
 }
 
 
@@ -60,5 +60,5 @@ newaction
 --
 
 return function(cfg)
-	return (_ACTION == "cmake")
+    return (_ACTION == "cmake")
 end
