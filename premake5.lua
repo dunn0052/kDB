@@ -4,10 +4,12 @@ workspace "DB"
 
     platforms
     {
-        "rpi", -- Needed for arm64 architecture
+        "rpi" -- Needed for arm64 architecture
+        --[[
         "Linux",
         "Windows",
         "MacOS"
+        ]]
     }
 
     configurations
@@ -58,14 +60,6 @@ project "Logger"
     {
 
     }
-
---[[
-    postbuildCommands
-    {
-        -- Move .so to common lib folder??
-        ("{COPY} %{cfg.buildtarget.relpath} ../bin/" .. outputdir )
-    }
-]]
 
 project "CLI"
 
@@ -211,12 +205,48 @@ project "Talker"
     {
     }
 
+project "Listener"
+
+    location "Listener"
+    kind "ConsoleApp"
+    language "C++"
+    cppdialect "C++17"
+    systemversion "latest" -- compiler version
+
+    targetdir(targetbuilddir)
+    objdir(intermediatedir)
+    libdirs(sharedbuildlibs)
+
+    files
+    {
+        projectsrc,
+    }
+
+    includedirs
+    {
+        commoninc,
+    }
+
+
+    links
+    {
+        "Logger",
+        "DBMapper",
+        "Threads::Threads"
+    }
+
+
+    defines
+    {
+    }
+
+
 filter "configurations:Debug"
     defines "_ENABLE_LOGGING"
     symbols "On"
 
 filter "configurations:Release"
-    --defines "LOGGING??"
+    defines "_ENABLE_LOGGING"
     optimize "On"
 
 filter "configurations:Performance"
@@ -234,6 +264,3 @@ filter "platforms:Linux"
 
 filter "platforms:Windows"
     architecture "x64"
-
-    includedirs(commoninc)
-    libdirs(sharedbuildlibs)

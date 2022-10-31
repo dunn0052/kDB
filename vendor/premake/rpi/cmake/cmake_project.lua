@@ -134,7 +134,7 @@ function m.generate(prj)
         end
         for _, link in ipairs(config.getlinks(cfg, "system", "fullpath")) do
             _p(1, '$<$<CONFIG:%s>:%s>', cmake.cfgname(cfg), link)
-            if "Threads::Threads" == link then
+            if "Threads::Threads" == link then -- Fix this for non-Linux
                 m.pthread = true
             end
         end
@@ -144,6 +144,7 @@ function m.generate(prj)
         _p(')')
 
         if m.pthread then
+			-- Have to do this awkard thing to include pthread
             _p("set(THREADS_PREFER_PTHREAD_FLAG ON)")
             _p("find_package(Threads REQUIRED)")
             m.pthread = false
