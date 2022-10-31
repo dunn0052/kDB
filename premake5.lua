@@ -1,18 +1,21 @@
 workspace "DB"
 
-    require "cmake"
+    require "cmake" -- needed for cmake extension
 
     platforms
     {
-        "rpi",
-        "Windows"
+        "rpi", -- Needed for arm64 architecture
+        "Linux",
+        "Windows",
+        "MacOS"
     }
 
     configurations
     {
-        "Debug",
-        "Release",
-        "Dist"
+        "Debug", -- no opt w/ logging
+        "Performance", -- opt w/ performance logging
+        "Release", -- opt w/ logging
+        "Distribution" -- opt w/o logging (fastest)
     }
 
 outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
@@ -45,7 +48,7 @@ project "Logger"
     }
 
     cppdialect "C++17"
-    staticruntime "On" -- static linking
+    staticruntime "On" -- static linking .so or .dll
     systemversion "latest" -- compiler version
 
     defines
@@ -69,7 +72,11 @@ filter "configurations:Release"
     --defines "LOGGING??"
     optimize "On"
 
-filter "configurations:Dist"
+filter "configurations:Performance"
+    --defines "Performance logging define"
+    optimize "On"
+
+filter "configurations:Distribution"
     optimize "On"
 
 filter "platforms:rpi"
