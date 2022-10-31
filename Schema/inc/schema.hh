@@ -37,20 +37,6 @@ inline std::istream& operator >> (std::istream& input_stream, OBJECT_SCHEMA& obj
     return input_stream >> object_entry.objectNumber >> object_entry.objectName >> object_entry.numberOfRecords;
 }
 
-struct DATABASE_SCHEMA
-{
-    std::string databaseName;
-    size_t databaseNumber;
-    std::string headerName;
-    size_t totalSize;
-    std::vector<OBJECT_SCHEMA> objects;
-};
-
-inline std::istream& operator >> (std::istream& input_stream, DATABASE_SCHEMA& database_entry)
-{
-    return input_stream >> database_entry.databaseNumber >>  database_entry.databaseName;
-}
-
-RETCODE GenerateDatabase(const DATABASE& databaseName);
+RETCODE GenerateObjectDBFiles(const OBJECT& objectName);
 
 #endif

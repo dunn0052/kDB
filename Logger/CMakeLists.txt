@@ -2,9 +2,8 @@
 project(Logger)
 
 set( SRC src )
-set( INC inc )
 
-include_directories( ${INC} ${INC}/../../common_inc)
+include_directories( ${COMMON_INCLUDE} )
 
 set(CXXSRC ${SRC}/Logger.cpp )
 

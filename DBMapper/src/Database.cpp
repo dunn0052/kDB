@@ -19,17 +19,17 @@ Database::~Database()
 
 }
 
-inline int OpenDatabase(const DATABASE& databaseName)
+inline int OpenDatabase(const OBJECT& objectName)
 {
    std::stringstream filepath;
     // Get relative path
-    filepath << "./db/" << databaseName << ".db";
+    filepath << "./db/db/" << objectName << ".db";
     const std::string path = filepath.str();
     int fd = open(path.c_str(), O_RDWR);
     return fd;
 }
 
-inline char* MapDatabase(int fd, off_t size)
+inline char* MapObject(int fd, off_t size)
 {
     char *p_return = static_cast<char*>( mmap(nullptr, size,
             PROT_READ | PROT_WRITE, MAP_SHARED,
@@ -43,65 +43,63 @@ inline char* MapDatabase(int fd, off_t size)
     return p_return;
 }
 
-RETCODE Database::Open(const DATABASE& databaseName)
+RETCODE Database::Open(const OBJECT& objectName)
 {
-    int fd = OpenDatabase(databaseName);
+    int fd = OpenDatabase(objectName);
 
     RETCODE retcode = RTN_OK;
     if( 0 > fd )
     {
-        std::cout << "Failed to open: " << databaseName << "\n";
-        retcode |= RTN_NOT_FOUND;;
+        std::cout << "Failed to open: " << objectName << "\n";
+        return RTN_NOT_FOUND;
     }
 
     struct stat statbuf;
     int error = fstat(fd, &statbuf);
     if( 0 > error )
     {
-        retcode |= RTN_NOT_FOUND;
+        return RTN_NOT_FOUND;
     }
 
-    char* p_database = MapDatabase(fd, statbuf.st_size);
-    if( nullptr == p_database )
+    char* p_object = MapObject(fd, statbuf.st_size);
+    if( nullptr == p_object )
     {
-        std::cout << "Failed to map: " <<  databaseName << "\n";
+        std::cout << "Failed to map: " <<  objectName << "\n";
         retcode |= RTN_FAIL;
     }
 
     error = close(fd);
     if( 0 > error )
     {
-        std::cout << "Could not close the database file for: " << databaseName << "\n";
+        std::cout << "Could not close the database file for: " << objectName << "\n";
         retcode |= RTN_FAIL;
     }
 
     if(RTN_OK == retcode )
     {
-        MappedMemory mem = {.p_mapped = p_database, .size = statbuf.st_size};
-        m_DatabaseMaps[databaseName] = mem;
+        MappedMemory mem = {.p_mapped = p_object, .size = statbuf.st_size};
+        m_ObjectMemMap[objectName] = mem;
     }
-
 
     return retcode;
 }
 
-RETCODE Database::Close(const DATABASE& databaseName)
-{
 
+RETCODE Database::Close(const OBJECT& objectName)
+{
     int error = 0;
 
-    auto mapIterator = m_DatabaseMaps.find(databaseName);
+    auto mapIterator = m_ObjectMemMap.find(objectName);
 
-    if ( mapIterator != m_DatabaseMaps.end() )
+    if ( mapIterator != m_ObjectMemMap.end() )
     {
         error = munmap(mapIterator->second.p_mapped, mapIterator->second.size);
+        m_ObjectMemMap.erase(mapIterator);
 
         if( 0 != error )
         {
             return RTN_FAIL;
         }
-
-        m_DatabaseMaps.erase(mapIterator);
 
         return RTN_OK;
     }
@@ -109,23 +107,24 @@ RETCODE Database::Close(const DATABASE& databaseName)
     return RTN_FAIL;
 }
 
-char* Database::Get(const DOFRI& dofri)
+char* Database::GetObjectMem(const OBJECT& objectName)
 {
-    return nullptr;
-}
+    auto mapIterator = m_ObjectMemMap.find(objectName);
 
-char* Database::Get(const DATABASE d, const OBJECT o, const FIELD f, const RECORD r, const INDEX i)
-{
-    return nullptr;
-}
-
-char* Database::GetDatabase(const DATABASE& databaseName)
-{
-    auto mapIterator = m_DatabaseMaps.find(databaseName);
-
-    if( mapIterator != m_DatabaseMaps.end() )
+    if( mapIterator != m_ObjectMemMap.end() )
     {
         return mapIterator->second.p_mapped;
+    }
+    else
+    {
+        // Attempt to open object
+        RETCODE retcode = Open(objectName);
+        if( RTN_OK == retcode )
+        {
+            // Hopefully we don't get some weird recursive bs
+            // But after opening the object should be mapped
+            return GetObjectMem(objectName);
+        }
     }
 
     return nullptr;

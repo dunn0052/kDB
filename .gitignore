@@ -38,7 +38,9 @@ lib/
 #CMAKE
 *.cmake
 build/
-debug/*
+debug/
+bin/
+lib/
 CMakeCache.*
 Makefile
 CMakeFiles/
@@ -53,3 +55,11 @@ CMakeLists.*
 #database
 db/inc/*
 db/db/*
+*.db
+
+#temp
+Talker/
+Listener/
+MessageLib/
+Message.hh
+SocketNames.hh

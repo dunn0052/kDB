@@ -3,8 +3,9 @@
 
 #include <ostream>
 #include <TextModifiers.hh>
+#include <compiler_defines.hh>
 
-#if _LOG_DEBUG
+#if _ENABLE_LOGGING
     #define LOG_TEMPLATE( MESSAGE, LEVEL,  ... ) Log::Logger::Instance().Log(Log::LogLevel::LEVEL, #LEVEL , __FILE__, __LINE__, MESSAGE, ##__VA_ARGS__ )
 #else
     #define LOG_TEMPLATE( MESSAGE, LEVEL, ... )
@@ -41,7 +42,7 @@ namespace Log
 
     private:
         Logger() {};
-        ~Logger() {/* should clean up any file streams here*/ };
+        ~Logger();
         Logger(Logger const&) = delete;
         void operator = (Logger const&) = delete;
         LogLevel m_LogLevel = LogLevel::NONE;

@@ -59,7 +59,11 @@ namespace Log
             }
         }
 
-        std::cout << TEXT_COLOR << "[" << debugLevel << "][" << fileName << ":" << lineNum << "] ";
+        std::cout << TEXT_COLOR << "[" << debugLevel << "]";
+ #ifdef _LOG_SHOW_LINE
+                std::cout << "[" << fileName << ":" << lineNum << "]";
+ #endif
+        std::cout << " ";
         char* s_Message = NULL;
         int nLength = 0;
         va_list args;
@@ -73,5 +77,10 @@ namespace Log
         va_end(args);
 
         delete[] s_Message;
+    }
+
+    Logger::~Logger()
+    {
+        std::cout << TEXT_COLOR_DEFAULT;
     }
 }

@@ -5,9 +5,9 @@ project(Schema)
 set( SRC src )
 set( INC inc )
 
-include_directories( ${INC} ${INC}/../../common_inc ${INC}/../../CLI/inc ${INC}/../../Logger/inc)
+include_directories( ${INC} ${COMMON_INCLUDE} )
 
-add_compile_definitions( _LOG_DEBUG )
+add_compile_definitions( _LOGGING )
 set(CXXSRC ${SRC}/main.cpp ${SRC}/schema.cpp )
 
 add_executable(${PROJECT_NAME}  ${CXXSRC} )
