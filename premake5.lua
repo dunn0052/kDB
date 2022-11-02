@@ -240,6 +240,37 @@ project "Listener"
     {
     }
 
+project "Profiler"
+
+    location "Profiler"
+    kind "ConsoleApp"
+    language "C++"
+    cppdialect "C++17"
+    systemversion "latest" -- compiler version
+
+    targetdir(targetbuilddir)
+    objdir(intermediatedir)
+    libdirs(sharedbuildlibs)
+
+    files
+    {
+        projectsrc,
+        projectinc
+    }
+
+    includedirs
+    {
+        commoninc,
+        projincpath
+    }
+
+
+    links
+    {
+        "Logger",
+        "Threads::Threads"
+    }
+
 
 filter "configurations:Debug"
     defines "_ENABLE_LOGGING"
