@@ -2,7 +2,7 @@
 #define INETMESSENGER__HH
 #include <retcode.hh>
 #include <DOFRI.hh>
-#include <StoppableTask.hh>
+#include <DaemonThread.hh>
 
 #include <vector>
 #include <string>

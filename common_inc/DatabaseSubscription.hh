@@ -26,7 +26,7 @@ public:
 
     RETCODE Set(OBJECT updated_object)
     {
-        s_DatabaseConnection.Send(&updated_object);
+        return s_DatabaseConnection.Send(&updated_object);
     }
 
 private:
@@ -35,7 +35,7 @@ private:
         char m_LocalObject[sizeof(OBJECT)] = '\0';
 
         // C++17 Only feature. Otherwise define in separate .cpp file
-        inline static INETMessenger DatabaseSubscription<OBJECT>::s_DatabaseConnection{};
+        //inline static INETMessenger DatabaseSubscription<OBJECT>::s_DatabaseConnection{};
 };
 
 #endif
