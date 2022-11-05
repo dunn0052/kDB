@@ -255,13 +255,13 @@ public:
                 continue;
             }
 
-            WriteProfile(result);
+            WriteProfile(result, writer_index);
         }
 
         // If we stopped before our queue is empty then
         while(queue[writer_index].Pop(result))
         {
-            WriteProfile(result);
+            WriteProfile(result, writer_index);
         }
     }
 
@@ -286,7 +286,7 @@ public:
         closed = true;
     }
 
-    void WriteProfile(const ProfileResult& result)
+    void WriteProfile(const ProfileResult& result, int index)
     {
         if(!closed)
         {
@@ -296,21 +296,21 @@ public:
                 m_json_stream << ",";
             }
 
-            //std::string name = result.Name;
-            //name.replace(name.begin(), name.end(), '"', '\'');
+            std::string name = result.Name;
+            std::cout << name << std::endl;
 
             // creates timing entry to the JSON file that is read by Chrome.
             m_json_stream
                 << "{\"cat\":\"function\",\"dur\":"<< (result.End - result.Start)
-                << ",\"name\":\"" << "TEST FUNCTION()"
+                << ",\"name\":\"" << name
                 << "\",\"ph\":\"X\",\"pid\":" << result.PID
                 << ",\"tid\":" << result.ThreadID
                 << ",\"ts\":" << result.Start << "}";
 
             /* flush here so data isn't lost in case of crash */
-            m_json_stream.flush();
+            //m_json_stream.flush();
 
-            //std::cout << "Profiles so far: " << profileCount << std::endl;
+            std::cout << "Written prof from index: " << index << std::endl;
         }
     }
 
@@ -346,18 +346,24 @@ public:
         full_json.open((json_file_name + JSON_EXT).c_str());
         WriteHeader();
 
-        for(size_t queue_index = 0; queue_index < 10; queue_index++)
+        for(size_t queue_index = 0; queue_index < 3; queue_index++)
         {
             m_Queues.emplace_back();
         }
 
         std::stringstream profile_name;
-        for(size_t writer_index = 0; writer_index  < 10; writer_index++)
+        for(size_t writer_index = 0; writer_index  < 3; writer_index++)
         {
             profile_name << "PROF_" << writer_index;
             m_Writers.emplace_back(profile_name.str());
-            m_Writers.back().start(&m_Queues, writer_index);
             profile_name.str("");
+        }
+
+        int windex = 0;
+        for(ProfileWriter writer : m_Writers)
+        {
+            m_Writers.back().start(&m_Queues, windex);
+            windex++;
         }
     }
     ~ProfPool()

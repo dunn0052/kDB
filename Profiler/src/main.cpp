@@ -3,6 +3,37 @@
 #include <CLI.hh>
 #include <profiler.hh>
 
+#include <cstdlib>
+
+void thread_func(int max_sleep_time)
+{
+    PROFILE_FUNCTION();
+
+    int sleep_time =  std::rand() % (max_sleep_time * 1000);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
+
+    std::cout << "end thread: " << syscall(__NR_gettid) << std::endl;
+}
+
+
 int main(int argc, char* argv[])
 {
+    PROFILE_FUNCTION();
+    static const bool running = true;
+    static uint64_t loop_count = 0;
+
+    std::vector<std::thread> threads;
+
+    for(int i = 0; i < 30; i++)
+    {
+        threads.push_back(std::thread(thread_func, 2));
+    }
+
+    for(std::thread& thread : threads)
+    {
+        thread.join();
+    }
+
+    std::cout << "End profiling!\n";
 }

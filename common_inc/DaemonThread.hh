@@ -12,12 +12,12 @@ template <typename... ARGS>
 class DaemonThread
 {
     bool m_Running;
-    std::thread m_RunningThread;
+    std::thread* m_RunningThread;
     std::promise<void> m_exitSignal;
     std::future<void> m_futureObj;
 public:
     DaemonThread() :
-        m_Running(false), m_RunningThread{}, m_futureObj(m_exitSignal.get_future())
+        m_Running(false), m_RunningThread(nullptr), m_futureObj(m_exitSignal.get_future())
         { }
 
     DaemonThread(DaemonThread && obj)
@@ -45,12 +45,12 @@ public:
 
     void start(ARGS... args)
     {
-        m_Running = true;
-        m_RunningThread = std::thread([this, args...]()
+        m_RunningThread = new std::thread([this, args...]()
         {
                 execute(args...);
         });
 
+        m_Running = true;
     }
 
     //Checks if thread is requested to stop
@@ -72,7 +72,8 @@ public:
         {
             m_Running = false;
             m_exitSignal.set_value();
-            m_RunningThread.join();
+            m_RunningThread->join();
+            delete m_RunningThread;
 
         }
     }
