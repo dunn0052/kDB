@@ -47,7 +47,7 @@ public:
     {
         m_RunningThread = new std::thread([this, args...]()
         {
-                execute(args...);
+                this->execute(args...);
         });
 
         m_Running = true;
@@ -73,7 +73,11 @@ public:
             m_Running = false;
             m_exitSignal.set_value();
             m_RunningThread->join();
-            delete m_RunningThread;
+            if(nullptr != m_RunningThread)
+            {
+                delete m_RunningThread;
+                m_RunningThread = nullptr;
+            }
 
         }
     }

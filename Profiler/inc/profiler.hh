@@ -206,7 +206,6 @@ class ProfQueue
             {
                 return false;
             }
-
             m_Tasks.push_back(std::move(prof));
 
             pthread_mutex_unlock(&m_Mutex);
@@ -223,19 +222,28 @@ class ProfileWriter : public DaemonThread<std::vector<ProfQueue>*, size_t>
 private:
     int profileCount;
     bool closed;
-    std::ofstream m_json_stream;
+    std::fstream m_json_stream;
+    std::string m_json_filename;
+    int id = 0;
+
 
     ProfileWriter& operator=(const ProfileWriter&);
 
 public:
 
-    ProfileWriter(const ProfileWriter&) { }
+    ProfileWriter(const ProfileWriter&)
+    {
+        std::cout << "ProfileWriter copy constructor" << std::endl;
+    }
 
     void execute(std::vector<ProfQueue>* results_queue, size_t writer_index)
     {
+
         ProfileResult result;
         result.End = 0;
         std::vector<ProfQueue>& queue = *results_queue;
+
+        m_json_stream.open(m_json_filename, std::fstream::app);
 
         while (!stopRequested())
         {
@@ -263,11 +271,13 @@ public:
         {
             WriteProfile(result, writer_index);
         }
+
+        m_json_stream.close();
     }
 
-    ProfileWriter(const std::string& filepath)
-        : profileCount(0), closed(false), m_json_stream(filepath.c_str(), std::ios::out)
-
+    ProfileWriter(const std::string& filepath, int writer_id)
+        : profileCount(0), closed(false),
+          m_json_filename(filepath), id(writer_id)
         {
         }
 
@@ -284,6 +294,7 @@ public:
         m_json_stream.close();
         profileCount = 0;
         closed = true;
+        remove(m_json_filename.c_str());
     }
 
     void WriteProfile(const ProfileResult& result, int index)
@@ -293,25 +304,45 @@ public:
             /* next item timed */
             if (profileCount++ > 0)
             {
-                m_json_stream << ",";
+                m_json_stream << ",\n";
             }
 
             std::string name = result.Name;
-            std::cout << name << std::endl;
 
             // creates timing entry to the JSON file that is read by Chrome.
             m_json_stream
                 << "{\"cat\":\"function\",\"dur\":"<< (result.End - result.Start)
-                << ",\"name\":\"" << name
+                << ",\"name\":\"" << result.Name
                 << "\",\"ph\":\"X\",\"pid\":" << result.PID
                 << ",\"tid\":" << result.ThreadID
                 << ",\"ts\":" << result.Start << "}";
 
             /* flush here so data isn't lost in case of crash */
-            //m_json_stream.flush();
-
-            std::cout << "Written prof from index: " << index << std::endl;
+            m_json_stream.flush();
         }
+    }
+
+    friend std::ofstream& operator<< (std::ofstream& os, ProfileWriter& p)
+    {
+        std::string data;
+
+        if(!p.m_json_stream.is_open())
+        {
+            p.m_json_stream.close();
+        }
+
+        if(!p.m_json_stream.good())
+        {
+            p.m_json_stream.clear();
+        }
+
+        p.m_json_stream.open(p.m_json_filename, std::fstream::in);
+
+        while(getline(p.m_json_stream, data)){
+            os << "\n        " << data;
+        }
+        p.m_json_stream.close();
+        return os;
     }
 
 };
@@ -340,35 +371,36 @@ public:
     }
 
     ProfPool(const std::string& json_profile_path = "PROCESS_PROFILE_RESULTS")
-    // sysconf(_SC_NPROCESSORS_ONLN) only for POSIX Linux
-    : profile_running(true), json_file_name(json_profile_path), m_PushIndex(0)
+    : json_file_name(json_profile_path + JSON_EXT),
+      full_json(json_file_name, std::ofstream::trunc), profile_running(true),
+      m_PushIndex(0), m_NumQueues(sysconf(_SC_NPROCESSORS_ONLN))
     {
-        full_json.open((json_file_name + JSON_EXT).c_str());
         WriteHeader();
 
-        for(size_t queue_index = 0; queue_index < 3; queue_index++)
+        for(size_t queue_index = 0; queue_index < m_NumQueues; queue_index++)
         {
             m_Queues.emplace_back();
         }
 
+        m_Writers.reserve(m_NumQueues); // avoid copy constructors
         std::stringstream profile_name;
-        for(size_t writer_index = 0; writer_index  < 3; writer_index++)
+        pid_t pid = getpid();
+        for(size_t writer_index = 0; writer_index  < m_NumQueues; writer_index++)
         {
-            profile_name << "PROF_" << writer_index;
-            m_Writers.emplace_back(profile_name.str());
+            profile_name << "PROF_" << pid << "_" << writer_index << JSON_EXT;
+            m_Writers.emplace_back(profile_name.str(), writer_index);
             profile_name.str("");
         }
 
-        int windex = 0;
-        for(ProfileWriter writer : m_Writers)
+        for(size_t writer_index = 0; writer_index < m_NumQueues; writer_index++)
         {
-            m_Writers.back().start(&m_Queues, windex);
-            windex++;
+            ProfileWriter& writer = m_Writers[writer_index];
+            writer.start(&m_Queues, writer_index);
         }
     }
     ~ProfPool()
     {
-        WriteFooter();
+
         for(ProfQueue& queue : m_Queues)
         {
             queue.done();
@@ -378,63 +410,52 @@ public:
         {
             writer.stop();
         }
+
+        WriteFooter();
     }
 
     void WriteHeader()
     {
-        full_json << "{\"otherData\": {},\"traceEvents\":[";
+        full_json << "{\"otherData\": {},\"traceEvents\":\n    [";
         full_json.flush();
     }
 
     void WriteFooter()
     {
-        #if 0
         /* If the program dies before this can be called,
             it can just be manually added to the end of the json file
         */
         /* @TODO have this added to the end of WriteProfile()
             so we don't have to worry about writing the footer
         */
-        size_t thread_index = 0;
         profile_running = false;
         bool first = true;
 
-        for(; thread_index < total_num_threads; ++thread_index)
+        if(!full_json.is_open())
         {
-            m_ProfQueue[thread_index].end();
+            std::cout << "full_json is not open!!\n";
         }
 
-        thread_index = 0;
-        for(; thread_index < total_num_threads; ++thread_index)
+        int t = 0;
+        for(ProfileWriter& writer: m_Writers)
         {
-            pthread_join(m_Threads[thread_index], NULL);
-        }
-
-        thread_index = 0;
-        for(; thread_index < total_num_threads; ++thread_index)
-        {
-            std::stringstream prof_path;
-            prof_path << json_file_name.c_str() << "_" << SSTR(thread_index) << JSON_EXT;
-            prof_json.open(prof_path.str());
             if(!first)
             {
                 full_json << ",";
             }
             first = false;
-            full_json << prof_json.rdbuf();
-            prof_json.close();
+            full_json << writer;
+            full_json.flush();
         }
 
-        full_json << "]}";
-        full_json.flush();
+        full_json << "\n    ]\n}";
         full_json.close();
-        #endif
     }
 
     static ProfPool& Instance()
     {
         /* Singleton instance*/
-        static ProfPool instance;
+        static ProfPool instance("PROCESS_" + SSTR(getpid()));
         return instance;
     }
 
@@ -443,13 +464,13 @@ private:
     ProfPool& operator=(const ProfPool&);
 
     private:
-        std::ofstream full_json;
-        std::ifstream prof_json;
-        volatile bool profile_running;
         std::string json_file_name;
+        std::ofstream full_json;
+        volatile bool profile_running;
         std::vector<ProfileWriter> m_Writers;
         std::vector<ProfQueue> m_Queues;
         size_t m_PushIndex;
+        size_t m_NumQueues;
 };
 
 class Timer

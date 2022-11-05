@@ -7,13 +7,17 @@
 
 void thread_func(int max_sleep_time)
 {
-    PROFILE_FUNCTION();
+    for(int i = 0; i < 10; i++)
+    {
+        PROFILE_FUNCTION();
 
-    int sleep_time =  std::rand() % (max_sleep_time * 1000);
+        int sleep_time =  std::rand() % (max_sleep_time * 10);
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
+        // doing "work"
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
 
-    std::cout << "end thread: " << syscall(__NR_gettid) << std::endl;
+        std::cout << "end thread: " << syscall(__NR_gettid) << std::endl;
+    }
 }
 
 
@@ -25,9 +29,9 @@ int main(int argc, char* argv[])
 
     std::vector<std::thread> threads;
 
-    for(int i = 0; i < 30; i++)
+    for(int i = 0; i < 3; i++)
     {
-        threads.push_back(std::thread(thread_func, 2));
+        threads.push_back(std::thread(thread_func, 10));
     }
 
     for(std::thread& thread : threads)
