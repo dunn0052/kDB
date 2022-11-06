@@ -3,22 +3,14 @@
 
 // View data by dragging JSON file to a chrome://tracing
 
-/* Usage: Begin timing sessions by calling Instrumentor::Get().BeginSession($SESSION_NAME$, $JSON_OUTPUT_PATH$);*/
-/* End session by calling  Instrumentor::Get().EndSession() */
-/*
- Notes: If program dies before EndSession() is called, the function data will still be available,
- but will be missing a ]} at the end of the file. Append a ]} at the end and it will fix this issue.
- This cannot be controlled as destructors are not called upon a program being killed.
- */
+/* Usage: Call PROFILE_FUNCTION() or PROFILE_SCOPE() to start profiling.
+ * START_PROFILING() can be called to start the profiler threads without
+ * logging profile metrics
 
-/*
-    Place a PROFILE_FUNCTION in any function once the Instrumentor is active
-    to get info on when that function was called and how long it took.
-    Note that putting this in every function may result in a json file too big to be opened.
-    To time a specific section of a function you can limit the scope by enclosing
-    the PROFILE_SCOPE($your_scope_name$) just to its own scope by adding {} around
-    the scope you want tested.
-*/
+ * Notes: If program dies before ProfileWriter::EndSession() is called, the profile data will still be available,
+ * but will be missing a ]} at the end of the file. Append a ]} at the end and it will fix this issue.
+ * This cannot be controlled as destructors are not called upon a program being killed.
+ */
 
 #include <string>
 #include <fstream>
@@ -37,20 +29,18 @@
 #include <sstream>
 #include <iostream>
 
-#include <Logger.hh>
 #include <DaemonThread.hh>
+
+// Program name for profile json
+// Not portable outside of glibc
+extern char *program_invocation_name;
+extern char *program_invocation_short_name;
 
 typedef uint64_t nanosec;
 
 static const std::string JSON_EXT = ".json";
 
-/// Convert seconds to nanoseconds
-#define SEC_TO_NS(sec) ((sec)*1000000000)
-
-// Because we're on C++0# and don't have std::to_string()..
-// From: https://stackoverflow.com/questions/5590381/easiest-way-to-convert-int-to-string-in-c
-#define SSTR( x ) static_cast< std::ostringstream & >( \
-    ( std::ostringstream() << std::dec << x ) ).str()
+static inline nanosec SEC_TO_NS(time_t sec) { return (sec * 1000000000); }
 
 // Profiling on 1; Profilling off 0
 #define PROFILING 1
@@ -62,12 +52,14 @@ static const std::string JSON_EXT = ".json";
 // Macros to get function signatures in the JSON
 #define PROFILE_SCOPE( NAME ) Timer timer##_LINE_( NAME )
 #define PROFILE_FUNCTION() PROFILE_SCOPE(FUNCTION_SIG)
+#define START_PROFILING() ProfPool::Instance()
 
 #else
 
 // If profiling is set to 0, disabled, don't compile
     #define PROFILE_SCOPE( NAME )
     #define PROFILE_FUNCTION()
+    #define START_PROFILING()
 #endif
 
 
@@ -220,7 +212,7 @@ class ProfQueue
         }
 };
 
-class ProfileWriter : public DaemonThread<std::vector<ProfQueue>*, size_t>
+class ProfileWriter : public DaemonThread<std::vector<ProfQueue>*>
 {
 
 private:
@@ -228,19 +220,16 @@ private:
     bool closed;
     std::fstream m_json_stream;
     std::string m_json_filename;
-    int id = 0;
+    int writer_index;
 
 
     ProfileWriter& operator=(const ProfileWriter&);
 
 public:
 
-    ProfileWriter(const ProfileWriter&)
-    {
-        std::cout << "ProfileWriter copy constructor" << std::endl;
-    }
+    ProfileWriter(const ProfileWriter&) { }
 
-    void execute(std::vector<ProfQueue>* results_queue, size_t writer_index)
+    void execute(std::vector<ProfQueue>* results_queue)
     {
 
         ProfileResult result;
@@ -267,13 +256,13 @@ public:
                 continue;
             }
 
-            WriteProfile(result, writer_index);
+            WriteProfile(result);
         }
 
         // If we stopped before our queue is empty then
         while(queue[writer_index].Pop(result))
         {
-            WriteProfile(result, writer_index);
+            WriteProfile(result);
         }
 
         m_json_stream.close();
@@ -281,7 +270,7 @@ public:
 
     ProfileWriter(const std::string& filepath, int writer_id)
         : profileCount(0), closed(false),
-          m_json_filename(filepath), id(writer_id)
+          m_json_filename(filepath), writer_index(writer_id)
         {
         }
 
@@ -301,7 +290,7 @@ public:
         remove(m_json_filename.c_str());
     }
 
-    void WriteProfile(const ProfileResult& result, int index)
+    void WriteProfile(const ProfileResult& result)
     {
         if(!closed)
         {
@@ -310,8 +299,6 @@ public:
             {
                 m_json_stream << ",\n";
             }
-
-            std::string name = result.Name;
 
             // creates timing entry to the JSON file that is read by Chrome.
             m_json_stream
@@ -345,7 +332,9 @@ public:
         while(getline(p.m_json_stream, data)){
             os << "\n        " << data;
         }
+
         p.m_json_stream.close();
+
         return os;
     }
 
@@ -376,27 +365,24 @@ public:
 
     ProfPool(const std::string& json_profile_path = "PROCESS_PROFILE_RESULTS")
     : json_file_name(json_profile_path + JSON_EXT),
-      full_json(json_file_name, std::ofstream::trunc), profile_running(true),
-      m_PushIndex(0), m_NumQueues(sysconf(_SC_NPROCESSORS_ONLN))
+      full_json(json_file_name, std::ofstream::trunc), m_PushIndex(0),
+      m_NumQueues(sysconf(_SC_NPROCESSORS_ONLN)), m_Queues(m_NumQueues)
     {
         WriteHeader();
-
-        m_Queues.reserve(m_NumQueues); // No constructor args so we only reserve
 
         m_Writers.reserve(m_NumQueues); // avoid copy constructors
         std::stringstream profile_name;
         pid_t pid = getpid();
-        for(size_t writer_index = 0; writer_index  < m_NumQueues; writer_index++)
+        for(size_t writer_index = 0; writer_index < m_NumQueues; writer_index++)
         {
             profile_name << "PROF_" << pid << "_" << writer_index << JSON_EXT;
             m_Writers.emplace_back(profile_name.str(), writer_index);
             profile_name.str("");
         }
 
-        for(size_t writer_index = 0; writer_index < m_NumQueues; writer_index++)
+        for(ProfileWriter& writer : m_Writers)
         {
-            ProfileWriter& writer = m_Writers[writer_index];
-            writer.start(&m_Queues, writer_index);
+            writer.start(&m_Queues);
         }
     }
     ~ProfPool()
@@ -412,6 +398,7 @@ public:
             writer.stop();
         }
 
+        WriteProfileData();
         WriteFooter();
     }
 
@@ -421,15 +408,9 @@ public:
         full_json.flush();
     }
 
-    void WriteFooter()
+
+    void WriteProfileData()
     {
-        /* If the program dies before this can be called,
-            it can just be manually added to the end of the json file
-        */
-        /* @TODO have this added to the end of WriteProfile()
-            so we don't have to worry about writing the footer
-        */
-        profile_running = false;
         bool first = true;
 
         if(!full_json.is_open())
@@ -437,7 +418,6 @@ public:
             std::cout << "full_json is not open!!\n";
         }
 
-        int t = 0;
         for(ProfileWriter& writer: m_Writers)
         {
             if(!first)
@@ -448,6 +428,18 @@ public:
             full_json << writer;
             full_json.flush();
         }
+    }
+
+    void WriteFooter()
+    {
+        /* If the program dies before this can be called,
+           "]}" can just be manually added to the end of the json file
+        */
+
+        if(!full_json.is_open())
+        {
+            std::cout << "full_json is not open!!\n";
+        }
 
         full_json << "\n    ]\n}";
         full_json.close();
@@ -456,7 +448,7 @@ public:
     static ProfPool& Instance()
     {
         /* Singleton instance*/
-        static ProfPool instance("PROCESS_" + SSTR(getpid()));
+        static ProfPool instance(std::string(program_invocation_short_name) + "_" + std::to_string(getpid()));
         return instance;
     }
 
@@ -467,11 +459,10 @@ private:
     private:
         std::string json_file_name;
         std::ofstream full_json;
-        volatile bool profile_running;
-        std::vector<ProfileWriter> m_Writers;
-        std::vector<ProfQueue> m_Queues;
         size_t m_PushIndex;
         size_t m_NumQueues;
+        std::vector<ProfileWriter> m_Writers;
+        std::vector<ProfQueue> m_Queues;
 };
 
 class Timer
@@ -520,13 +511,16 @@ private:
 
         if (-1 == return_code)
         {
-            printf("Failed to obtain timestamp. errno = %i: %s\n", errno,
-                strerror(errno));
-            nanoseconds = UINT64_MAX; // use this to indicate error
+            std::cout << "Failed to obtain timestamp. errno = "
+                      << errno << ": "
+                      << strerror(errno)
+                      << std::endl;
+
+                      nanoseconds = UINT64_MAX; // use this to indicate error
         }
         else
         {
-            nanoseconds = SEC_TO_NS((nanosec)ts.tv_sec) + (nanosec)ts.tv_nsec;
+            nanoseconds = SEC_TO_NS(ts.tv_sec) + (nanosec)ts.tv_nsec;
         }
 
         return nanoseconds;

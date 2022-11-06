@@ -253,7 +253,7 @@ function m.generate(prj)
             _p("set(CMAKE_CXX_FLAGS_%s %s)", string.upper(cmake.cfgname(cfg)), "-g3")
         end
 
-        if(cfg.optomize ~= nil and cf.optomize == "On") then
+        if(cfg.optomize ~= nil and cfg.optomize == "On") then
             _p("set(CMAKE_C_FLAGS_%s %s)", string.upper(cmake.cfgname(cfg)), "-O3 -DNDEBUG")
             _p("set(CMAKE_CXX_FLAGS_%s %s)", string.upper(cmake.cfgname(cfg)), "-O3 -DNDEBUG")
         end
