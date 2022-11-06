@@ -123,12 +123,16 @@ class ProfQueue
         pthread_mutex_t m_Mutex;
         pthread_cond_t m_Ready;
 
+        ProfQueue& operator=(const ProfQueue&);
+
     public:
         ProfQueue() : m_Tasks{}, m_done(false), m_Mutex(PTHREAD_MUTEX_INITIALIZER)
         {
             pthread_mutex_init(&m_Mutex, NULL);
             pthread_cond_init(&m_Ready, NULL);
         }
+
+        ProfQueue(const ProfQueue&) { }
 
         ~ProfQueue()
         {
@@ -377,10 +381,7 @@ public:
     {
         WriteHeader();
 
-        for(size_t queue_index = 0; queue_index < m_NumQueues; queue_index++)
-        {
-            m_Queues.emplace_back();
-        }
+        m_Queues.reserve(m_NumQueues); // No constructor args so we only reserve
 
         m_Writers.reserve(m_NumQueues); // avoid copy constructors
         std::stringstream profile_name;
@@ -479,7 +480,12 @@ class Timer
 public:
     Timer(const char* name)
         :Name(name), stopped(false), startTimepoint(now())
-    {}
+    {
+        // Introduce timer delays so we can test optimizations
+        // Delay everything except function you want to see if an
+        // optimization would work.
+
+    }
 
     ~Timer()
     {

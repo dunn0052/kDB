@@ -56,3 +56,6 @@ CMakeLists.*
 db/inc/*
 db/db/*
 *.db
+
+#profiler
+*.json
