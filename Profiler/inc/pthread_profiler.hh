@@ -29,7 +29,6 @@
 #include <string.h> // `strerror(errno)`
 #include <time.h>   // `clock_gettime()` and `timespec_get()`
 #include <queue>
-#include <sstream>
 #include <iostream>
 
 
@@ -50,7 +49,7 @@ static inline nanosec SEC_TO_NS(time_t sec) { return (sec * 1000000000); }
 
 // Profiling on 1; Profilling off 0
 #define PROFILING 1
-#ifdef _ENABLE_PROFILING
+#ifdef PROFILING
 
 
 // linux only!!
@@ -117,7 +116,7 @@ class ProfQueue
         ProfQueue& operator=(const ProfQueue&);
 
     public:
-        ProfQueue() : m_Tasks{}, m_done(false), m_Mutex(PTHREAD_MUTEX_INITIALIZER)
+        ProfQueue() : m_Tasks(), m_done(false), m_Mutex()
         {
             pthread_mutex_init(&m_Mutex, NULL);
             pthread_cond_init(&m_Ready, NULL);
@@ -217,7 +216,7 @@ class ProfileWriter
 private:
     int m_ProfileCount;
     bool m_Closed;
-    std::fstream m_json_stream;
+    std::fstream m_JSON_Stream;
     std::string m_json_filename;
     size_t m_Writer_Index;
     pthread_mutex_t m_Mutex;
@@ -226,18 +225,34 @@ private:
     bool m_Running;
     std::vector<ProfQueue>* m_ResultsQueue;
 
-    ProfileWriter& operator=(const ProfileWriter&);
 
 public:
 
+    ProfileWriter& operator=(const ProfileWriter& other)
+    {
+       m_ProfileCount = other.m_ProfileCount;
+       m_Closed = other.m_Closed;
+       m_json_filename = other.m_json_filename;
+       m_Writer_Index = other.m_Writer_Index;
+       m_Mutex = other.m_Mutex;
+       m_StopRequested = other.m_StopRequested;
+       m_ThreadID = other.m_ThreadID;
+       m_Running = other.m_Running;
+       m_ResultsQueue = other.m_ResultsQueue;
+
+       //m_JSON_Stream.open(other.m_json_filename.c_str());
+
+       return *this;
+    }
+
     ProfileWriter(const ProfileWriter& other)
      : m_ProfileCount(other.m_ProfileCount), m_Closed(other.m_Closed),
-       m_json_stream(other.m_json_filename), m_json_filename(other.m_json_filename),
+       m_json_filename(other.m_json_filename),
        m_Writer_Index(other.m_Writer_Index), m_Mutex(other.m_Mutex),
        m_StopRequested(other.m_StopRequested), m_ThreadID(other.m_ThreadID),
-       m_Running(other.m_Running), m_ResultsQueue(m_ResultsQueue)
+       m_Running(other.m_Running), m_ResultsQueue(other.m_ResultsQueue)
     {
-
+        //m_JSON_Stream.open(other.m_json_filename.c_str());
     }
 
     void execute()
@@ -247,7 +262,7 @@ public:
         result.End = 0;
         std::vector<ProfQueue>& queue = *m_ResultsQueue;
 
-        m_json_stream.open(m_json_filename, std::fstream::app);
+        m_JSON_Stream.open(m_json_filename.c_str(), std::fstream::app);
 
         while (!stopRequested())
         {
@@ -276,15 +291,15 @@ public:
             WriteProfile(result);
         }
 
-        m_json_stream.close();
+        m_JSON_Stream.close();
     }
 
     ProfileWriter(const std::string& filepath, size_t writer_id)
         : m_ProfileCount(0), m_Closed(false),
           m_json_filename(filepath), m_Writer_Index(writer_id),
-          m_Mutex(PTHREAD_MUTEX_INITIALIZER),
+          m_Mutex(),
           m_StopRequested(false), m_ThreadID(0), m_Running(false),
-          m_ResultsQueue(nullptr)
+          m_ResultsQueue(NULL)
         {
             pthread_mutex_init(&m_Mutex, NULL);
         }
@@ -299,7 +314,7 @@ public:
 
     void EndSession()
     {
-        m_json_stream.close();
+        m_JSON_Stream.close();
         m_ProfileCount = 0;
         m_Closed = true;
         remove(m_json_filename.c_str());
@@ -312,11 +327,11 @@ public:
             /* next item timed */
             if (m_ProfileCount++ > 0)
             {
-                m_json_stream << ",\n";
+                m_JSON_Stream << ",\n";
             }
 
             // creates timing entry to the JSON file that is read by Chrome.
-            m_json_stream
+            m_JSON_Stream
                 << "{\"cat\":\"function\",\"dur\":"<< (result.End - result.Start)
                 << ",\"name\":\"" << result.Name
                 << "\",\"ph\":\"X\",\"pid\":" << result.PID
@@ -324,7 +339,7 @@ public:
                 << ",\"ts\":" << result.Start << "}";
 
             /* flush here so data isn't lost in case of crash */
-            m_json_stream.flush();
+            m_JSON_Stream.flush();
         }
     }
 
@@ -332,28 +347,27 @@ public:
     {
         std::string data;
 
-        if(!p.m_json_stream.is_open())
+        if(!p.m_JSON_Stream.is_open())
         {
-            p.m_json_stream.close();
+            p.m_JSON_Stream.close();
         }
 
-        if(!p.m_json_stream.good())
+        if(!p.m_JSON_Stream.good())
         {
-            p.m_json_stream.clear();
+            p.m_JSON_Stream.clear();
         }
 
-        p.m_json_stream.open(p.m_json_filename, std::fstream::in);
+        p.m_JSON_Stream.open(p.m_json_filename.c_str(), std::fstream::in);
 
-        while(getline(p.m_json_stream, data)){
+        while(getline(p.m_JSON_Stream, data)){
             os << "\n        " << data;
         }
 
-        p.m_json_stream.close();
+        p.m_JSON_Stream.close();
 
         return os;
     }
 
-        //Checks if thread is requested to stop
     bool stopRequested()
     {
 
@@ -438,9 +452,10 @@ public:
 
     ProfPool(const std::string& json_profile_path = "PROCESS_PROFILE_RESULTS")
     : json_file_name(json_profile_path + JSON_EXT),
-      full_json(json_file_name, std::ofstream::trunc), m_PushIndex(0),
+      m_PushIndex(0),
       m_NumQueues(sysconf(_SC_NPROCESSORS_ONLN)), m_Queues(m_NumQueues)
     {
+        full_json.open(json_file_name.c_str(), std::ofstream::trunc),
         WriteHeader();
 
         std::stringstream profile_name;
@@ -457,8 +472,9 @@ public:
         }
 
         // Must start ONLY after all are created to avoid deadlocks
-        for(ProfileWriter& writer : m_Writers)
+        for(size_t writer_index = 0; writer_index < m_NumQueues; writer_index++)
         {
+            ProfileWriter& writer = m_Writers[writer_index];
             writer.start(&m_Queues);
         }
     }
@@ -467,13 +483,15 @@ public:
     ~ProfPool()
     {
         // Must be done before we stop writers
-        for(ProfQueue& queue : m_Queues)
+        for(size_t queue_index = 0; queue_index < m_Queues.size(); queue_index++)
         {
+            ProfQueue& queue = m_Queues[queue_index];
             queue.done();
         }
 
-        for(ProfileWriter& writer: m_Writers)
+        for(size_t writer_index = 0; writer_index < m_Writers.size(); writer_index++)
         {
+            ProfileWriter& writer = m_Writers[writer_index];
             writer.stop();
         }
 
@@ -497,8 +515,9 @@ public:
             std::cout << "full_json is not open!!\n";
         }
 
-        for(ProfileWriter& writer: m_Writers)
+        for(size_t writer_index = 0; writer_index < m_Writers.size(); writer_index++)
         {
+            ProfileWriter& writer = m_Writers[writer_index];
             if(!first)
             {
                 full_json << ",";
