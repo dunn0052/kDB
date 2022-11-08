@@ -44,21 +44,26 @@ static const std::string JSON_EXT = ".json";
 
 static inline nanosec SEC_TO_NS(time_t sec) { return (sec * 1000000000); }
 
+// macro to avoid templating a function
+#define SSTR( x ) static_cast< std::ostringstream & >( \
+    ( std::ostringstream() << std::dec << x ) ).str()
+
 // Profiling on 1; Profilling off 0
 #define PROFILING 1
-#if PROFILING
+#ifdef _ENABLE_PROFILING
 
 
+// linux only!!
 #define FUNCTION_SIG __PRETTY_FUNCTION__
 
-// Macros to get function signatures in the JSON
+// Printing macrros
 #define PROFILE_SCOPE( NAME ) Timer timer##_LINE_( NAME )
 #define PROFILE_FUNCTION() PROFILE_SCOPE(FUNCTION_SIG)
 #define START_PROFILING() ProfPool::Instance()
 
 #else
 
-// If profiling is set to 0, disabled, don't compile
+// If _ENABLE_PROFILING isn't set then all is simply compiled out of the build
     #define PROFILE_SCOPE( NAME )
     #define PROFILE_FUNCTION()
     #define START_PROFILING()
@@ -66,7 +71,7 @@ static inline nanosec SEC_TO_NS(time_t sec) { return (sec * 1000000000); }
 
 struct ProfileResult
 {
-    ProfileResult(ProfileResult& other)
+    ProfileResult(const ProfileResult& other)
         : Name(other.Name), Start(other.Start),
           End(other.End), ThreadID(other.ThreadID),
           PID(other.PID)
@@ -84,19 +89,13 @@ struct ProfileResult
         return *this;
     }
 
-    ProfileResult(const ProfileResult& other)
-    {
-        Name = other.Name;
-        Start = other.Start;
-        End = other.End;
-        ThreadID = other.ThreadID;
-        PID = other.PID;
-    }
 
     ProfileResult(const std::string& name, nanosec& start, nanosec& end,
-                    pid_t& threadid, pid_t& pid)
+                  pid_t& threadid, pid_t& pid)
         : Name(name), Start(start), End(end), ThreadID(threadid), PID(pid)
-        {}
+        {
+
+        }
 
     ProfileResult() {}
 
@@ -110,7 +109,7 @@ struct ProfileResult
 class ProfQueue
 {
     private:
-        std::deque<ProfileResult> m_Tasks;
+        std::queue<ProfileResult> m_Tasks;
         bool m_done;
         pthread_mutex_t m_Mutex;
         pthread_cond_t m_Ready;
@@ -157,7 +156,7 @@ class ProfQueue
             }
 
             prof = m_Tasks.front();
-            m_Tasks.pop_front();
+            m_Tasks.pop();
 
             pthread_mutex_unlock(&m_Mutex);
             return true;
@@ -180,7 +179,7 @@ class ProfQueue
             }
 
             prof = m_Tasks.front();
-            m_Tasks.pop_front();
+            m_Tasks.pop();
 
             pthread_mutex_unlock(&m_Mutex);
 
@@ -190,7 +189,7 @@ class ProfQueue
         void Push(ProfileResult& prof)
         {
             pthread_mutex_lock(&m_Mutex);
-            m_Tasks.push_back(prof);
+            m_Tasks.push(prof);
             pthread_mutex_unlock(&m_Mutex);
 
             pthread_cond_signal(&m_Ready);
@@ -202,7 +201,7 @@ class ProfQueue
             {
                 return false;
             }
-            m_Tasks.push_back(prof);
+            m_Tasks.push(prof);
 
             pthread_mutex_unlock(&m_Mutex);
 
@@ -216,23 +215,30 @@ class ProfileWriter
 {
 
 private:
-    int profileCount;
-    bool closed;
+    int m_ProfileCount;
+    bool m_Closed;
     std::fstream m_json_stream;
     std::string m_json_filename;
-    size_t writer_index;
+    size_t m_Writer_Index;
     pthread_mutex_t m_Mutex;
     bool m_StopRequested;
     pthread_t m_ThreadID;
     bool m_Running;
     std::vector<ProfQueue>* m_ResultsQueue;
 
-
     ProfileWriter& operator=(const ProfileWriter&);
 
 public:
 
-    ProfileWriter(const ProfileWriter&) { }
+    ProfileWriter(const ProfileWriter& other)
+     : m_ProfileCount(other.m_ProfileCount), m_Closed(other.m_Closed),
+       m_json_stream(other.m_json_filename), m_json_filename(other.m_json_filename),
+       m_Writer_Index(other.m_Writer_Index), m_Mutex(other.m_Mutex),
+       m_StopRequested(other.m_StopRequested), m_ThreadID(other.m_ThreadID),
+       m_Running(other.m_Running), m_ResultsQueue(m_ResultsQueue)
+    {
+
+    }
 
     void execute()
     {
@@ -248,14 +254,14 @@ public:
             // Steal tasks
             for(size_t queueIndex = 0; queueIndex != queue.size(); ++ queueIndex)
             {
-                if(queue[(queueIndex + writer_index) % queue.size()].TryPop(result))
+                if(queue[(queueIndex + m_Writer_Index) % queue.size()].TryPop(result))
                 {
                     break;
                 }
             }
 
-            // Otherwise wait for ours
-            if(!result.End && !queue[writer_index].Pop(result))
+            // Otherwise wait for ours with Pop()
+            if( (0 == result.End) && (!queue[m_Writer_Index].Pop(result)) )
             {
                 // Once done, just wait for the thread to be stopped
                 continue;
@@ -264,8 +270,8 @@ public:
             WriteProfile(result);
         }
 
-        // If we stopped before our queue is empty then
-        while(queue[writer_index].Pop(result))
+        // If we stopped before our queue is empty then clear it out
+        while(queue[m_Writer_Index].Pop(result))
         {
             WriteProfile(result);
         }
@@ -274,8 +280,8 @@ public:
     }
 
     ProfileWriter(const std::string& filepath, size_t writer_id)
-        : profileCount(0), closed(false),
-          m_json_filename(filepath), writer_index(writer_id),
+        : m_ProfileCount(0), m_Closed(false),
+          m_json_filename(filepath), m_Writer_Index(writer_id),
           m_Mutex(PTHREAD_MUTEX_INITIALIZER),
           m_StopRequested(false), m_ThreadID(0), m_Running(false),
           m_ResultsQueue(nullptr)
@@ -285,28 +291,26 @@ public:
 
     ~ProfileWriter()
     {
-        if (!closed)
+        if (!m_Running)
         {
             EndSession();
         }
-
-        pthread_mutex_destroy(&m_Mutex);
     }
 
     void EndSession()
     {
         m_json_stream.close();
-        profileCount = 0;
-        closed = true;
+        m_ProfileCount = 0;
+        m_Closed = true;
         remove(m_json_filename.c_str());
     }
 
     void WriteProfile(const ProfileResult& result)
     {
-        if(!closed)
+        if(!m_Closed)
         {
             /* next item timed */
-            if (profileCount++ > 0)
+            if (m_ProfileCount++ > 0)
             {
                 m_json_stream << ",\n";
             }
@@ -390,10 +394,16 @@ public:
         {
             m_Running = false;
 
+            // Wait for lock here to avoid clashing with stopRequested()
             pthread_mutex_lock(&m_Mutex);
             m_StopRequested = true;
             pthread_mutex_unlock(&m_Mutex);
+
+            // A stop has been requested so will finish up queue and quit
             pthread_join(m_ThreadID, NULL);
+
+            pthread_mutex_destroy(&m_Mutex);
+
             m_ThreadID = 0;
         }
     }
@@ -402,12 +412,15 @@ public:
 
 class ProfPool
 {
+    // Number of times to spin around push queues
     static const size_t ROUNDS = 3;
+
 public:
 
     // Could try to make this async
     void Log(ProfileResult& result)
     {
+        // Keep moving where we start pushing to spread between queues
         m_PushIndex++;
 
         // Run through queues to see if any are available for a push
@@ -419,7 +432,7 @@ public:
             }
         }
 
-        // All queues are busy, just wait until free;
+        // All queues are busy, just wait until free
         m_Queues[m_PushIndex % m_Queues.size()].Push(result);
     }
 
@@ -430,24 +443,30 @@ public:
     {
         WriteHeader();
 
-        m_Writers.reserve(m_NumQueues); // avoid copy constructors
         std::stringstream profile_name;
         pid_t pid = getpid();
+
+        // Note: number of writers MUST == number of queues otherwise will run
+        // into deadlock
         for(size_t writer_index = 0; writer_index < m_NumQueues; writer_index++)
         {
             profile_name << "PROF_" << pid << "_" << writer_index << JSON_EXT;
-            m_Writers.emplace_back(profile_name.str(), writer_index);
+            ProfileWriter writer(profile_name.str(), writer_index);
+            m_Writers.push_back(writer);
             profile_name.str("");
         }
 
+        // Must start ONLY after all are created to avoid deadlocks
         for(ProfileWriter& writer : m_Writers)
         {
             writer.start(&m_Queues);
         }
     }
+
+    // A lot of work here, but only done when program exits
     ~ProfPool()
     {
-
+        // Must be done before we stop writers
         for(ProfQueue& queue : m_Queues)
         {
             queue.done();
@@ -484,8 +503,11 @@ public:
             {
                 full_json << ",";
             }
+
             first = false;
             full_json << writer;
+
+            // Flush data in case of crash we have it
             full_json.flush();
         }
     }
@@ -508,7 +530,7 @@ public:
     static ProfPool& Instance()
     {
         /* Singleton instance*/
-        static ProfPool instance(std::string(program_invocation_short_name) + "_" + std::to_string(getpid()));
+        static ProfPool instance(std::string(program_invocation_short_name) + "_" + SSTR(getpid()));
         return instance;
     }
 
