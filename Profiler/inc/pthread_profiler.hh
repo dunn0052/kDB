@@ -31,7 +31,6 @@
 #include <queue>
 #include <iostream>
 
-
 // Program name for profile json
 // Not portable outside of glibc
 extern char *program_invocation_name;
@@ -47,7 +46,7 @@ static inline nanosec SEC_TO_NS(time_t sec) { return (sec * 1000000000); }
 #define SSTR( x ) static_cast< std::ostringstream & >( \
     ( std::ostringstream() << std::dec << x ) ).str()
 
-// Profiling on 1; Profilling off 0
+// Profiling on 1; Profiling off 0
 #define PROFILING 1
 #ifdef PROFILING
 
@@ -55,10 +54,10 @@ static inline nanosec SEC_TO_NS(time_t sec) { return (sec * 1000000000); }
 // linux only!!
 #define FUNCTION_SIG __PRETTY_FUNCTION__
 
-// Printing macrros
+// Printing macros
 #define PROFILE_SCOPE( NAME ) Timer timer##_LINE_( NAME )
 #define PROFILE_FUNCTION() PROFILE_SCOPE(FUNCTION_SIG)
-#define START_PROFILING() ProfPool::Instance()
+#define START_PROFILING()  ProfPool::Instance()
 
 #else
 
@@ -216,7 +215,7 @@ class ProfileWriter
 private:
     int m_ProfileCount;
     bool m_Closed;
-    std::fstream m_JSON_Stream;
+    std::ofstream m_JSON_Stream;
     std::string m_json_filename;
     size_t m_Writer_Index;
     pthread_mutex_t m_Mutex;
@@ -240,8 +239,6 @@ public:
        m_Running = other.m_Running;
        m_ResultsQueue = other.m_ResultsQueue;
 
-       //m_JSON_Stream.open(other.m_json_filename.c_str());
-
        return *this;
     }
 
@@ -252,7 +249,7 @@ public:
        m_StopRequested(other.m_StopRequested), m_ThreadID(other.m_ThreadID),
        m_Running(other.m_Running), m_ResultsQueue(other.m_ResultsQueue)
     {
-        //m_JSON_Stream.open(other.m_json_filename.c_str());
+        // Intentionally empty
     }
 
     void execute()
@@ -262,7 +259,10 @@ public:
         result.End = 0;
         std::vector<ProfQueue>& queue = *m_ResultsQueue;
 
-        m_JSON_Stream.open(m_json_filename.c_str(), std::fstream::app);
+        if(!m_JSON_Stream.is_open())
+        {
+            m_JSON_Stream.open(m_json_filename.c_str(), std::ofstream::trunc);
+        }
 
         while (!stopRequested())
         {
@@ -292,6 +292,9 @@ public:
         }
 
         m_JSON_Stream.close();
+
+        pthread_exit(NULL);
+
     }
 
     ProfileWriter(const std::string& filepath, size_t writer_id)
@@ -302,6 +305,7 @@ public:
           m_ResultsQueue(NULL)
         {
             pthread_mutex_init(&m_Mutex, NULL);
+
         }
 
     ~ProfileWriter()
@@ -314,7 +318,6 @@ public:
 
     void EndSession()
     {
-        m_JSON_Stream.close();
         m_ProfileCount = 0;
         m_Closed = true;
         remove(m_json_filename.c_str());
@@ -357,13 +360,19 @@ public:
             p.m_JSON_Stream.clear();
         }
 
-        p.m_JSON_Stream.open(p.m_json_filename.c_str(), std::fstream::in);
+        std::ifstream json;
+        json.open(p.m_json_filename.c_str());
+        if(!json.is_open())
+        {
+            std::cout << "Could not open: " << p.m_json_filename << "!\n";
+            return os;
+        }
 
-        while(getline(p.m_JSON_Stream, data)){
+        while(getline(json, data)){
             os << "\n        " << data;
         }
 
-        p.m_JSON_Stream.close();
+        json.close();
 
         return os;
     }
@@ -395,11 +404,14 @@ public:
 
     void start(std::vector<ProfQueue>* results_queue)
     {
-        m_ResultsQueue = results_queue;
+        if(!m_Running)
+        {
+            m_ResultsQueue = results_queue;
 
-        pthread_create(&m_ThreadID, NULL, ProfileWriter::thread_helper, static_cast<void*>(this));
+            pthread_create(&m_ThreadID, NULL, ProfileWriter::thread_helper, static_cast<void*>(this));
 
-        m_Running = true;
+            m_Running = true;
+        }
     }
 
     void stop()
@@ -427,6 +439,8 @@ public:
 class ProfPool
 {
     // Number of times to spin around push queues
+    // This value is only a guess and may be experimented on to tweak for
+    // optimal performance
     static const size_t ROUNDS = 3;
 
 public:
@@ -435,7 +449,7 @@ public:
     void Log(ProfileResult& result)
     {
         // Keep moving where we start pushing to spread between queues
-        m_PushIndex++;
+        m_PushIndex++; // May need to reset to avoid possible integer overflow
 
         // Run through queues to see if any are available for a push
         for(size_t queueIndex = 0; queueIndex != m_Queues.size() * ROUNDS; ++queueIndex)
@@ -450,34 +464,7 @@ public:
         m_Queues[m_PushIndex % m_Queues.size()].Push(result);
     }
 
-    ProfPool(const std::string& json_profile_path = "PROCESS_PROFILE_RESULTS")
-    : json_file_name(json_profile_path + JSON_EXT),
-      m_PushIndex(0),
-      m_NumQueues(sysconf(_SC_NPROCESSORS_ONLN)), m_Queues(m_NumQueues)
-    {
-        full_json.open(json_file_name.c_str(), std::ofstream::trunc),
-        WriteHeader();
-
-        std::stringstream profile_name;
-        pid_t pid = getpid();
-
-        // Note: number of writers MUST == number of queues otherwise will run
-        // into deadlock
-        for(size_t writer_index = 0; writer_index < m_NumQueues; writer_index++)
-        {
-            profile_name << "PROF_" << pid << "_" << writer_index << JSON_EXT;
-            ProfileWriter writer(profile_name.str(), writer_index);
-            m_Writers.push_back(writer);
-            profile_name.str("");
-        }
-
-        // Must start ONLY after all are created to avoid deadlocks
-        for(size_t writer_index = 0; writer_index < m_NumQueues; writer_index++)
-        {
-            ProfileWriter& writer = m_Writers[writer_index];
-            writer.start(&m_Queues);
-        }
-    }
+    
 
     // A lot of work here, but only done when program exits
     ~ProfPool()
@@ -485,14 +472,12 @@ public:
         // Must be done before we stop writers
         for(size_t queue_index = 0; queue_index < m_Queues.size(); queue_index++)
         {
-            ProfQueue& queue = m_Queues[queue_index];
-            queue.done();
+            m_Queues[queue_index].done();
         }
 
         for(size_t writer_index = 0; writer_index < m_Writers.size(); writer_index++)
         {
-            ProfileWriter& writer = m_Writers[writer_index];
-            writer.stop();
+            m_Writers[writer_index].stop();
         }
 
         WriteProfileData();
@@ -554,6 +539,41 @@ public:
     }
 
 private:
+
+    ProfPool(const std::string& json_profile_path = "PROCESS_PROFILE_RESULTS")
+    : json_file_name(json_profile_path + JSON_EXT),
+      m_PushIndex(0),
+      m_NumQueues(4/*sysconf(_SC_NPROCESSORS_ONLN)*/), m_Queues(m_NumQueues)
+    {
+        full_json.open(json_file_name.c_str(), std::ofstream::trunc);
+        if(!full_json.is_open())
+        {
+            std::cout << "Could not open full_json! Profiling failed!\n";
+            return;
+        }
+
+        WriteHeader();
+
+        std::stringstream profile_name;
+        pid_t pid = getpid();
+
+        // Note: number of writers MUST == number of queues otherwise will run
+        // into deadlock
+        for(size_t writer_index = 0; writer_index < m_NumQueues; writer_index++)
+        {
+            profile_name << "PROF_" << pid << "_" << writer_index << JSON_EXT;
+            ProfileWriter writer =ProfileWriter(profile_name.str(), writer_index);
+            m_Writers.push_back(writer);
+            profile_name.str("");
+        }
+
+        // Must start ONLY after all are created to avoid deadlocks
+        for(size_t writer_index = 0; writer_index < m_NumQueues; writer_index++)
+        {
+            m_Writers[writer_index].start(&m_Queues);
+        }
+    }
+
     ProfPool(const ProfPool&);
     ProfPool& operator=(const ProfPool&);
 
@@ -632,5 +652,7 @@ private:
     bool stopped;
     nanosec startTimepoint;
 };
+
+
 
 #endif
