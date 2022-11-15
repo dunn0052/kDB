@@ -67,92 +67,92 @@ static inline nanosec SEC_TO_NS(time_t sec) { return (sec * 1000000000); }
 struct ProfileResult
 {
     ProfileResult(ProfileResult&& other)
-        : Name(std::move(other.Name)), Start(std::move(other.Start)),
-          End(std::move(other.End)), ThreadID(std::move(other.ThreadID)),
-          PID(std::move(other.PID))
+        : m_Name(std::move(other.m_Name)), m_Start(std::move(other.m_Start)),
+          m_End(std::move(other.m_End)), m_ThreadID(std::move(other.m_ThreadID)),
+          m_PID(std::move(other.m_PID))
     {
 
     }
 
     ProfileResult& operator=(ProfileResult&& other)
     {
-        Name = std::move(other.Name);
-        Start = std::move(other.Start);
-        End = std::move(other.End);
-        ThreadID = std::move(other.ThreadID);
-        PID = std::move(other.PID);
+        m_Name = std::move(other.m_Name);
+        m_Start = std::move(other.m_Start);
+        m_End = std::move(other.m_End);
+        m_ThreadID = std::move(other.m_ThreadID);
+        m_PID = std::move(other.m_PID);
         return *this;
     }
 
     ProfileResult(const ProfileResult& other)
     {
-        Name = other.Name;
-        Start = other.Start;
-        End = other.End;
-        ThreadID = other.ThreadID;
-        PID = other.PID;
+        m_Name = other.m_Name;
+        m_Start = other.m_Start;
+        m_End = other.m_End;
+        m_ThreadID = other.m_ThreadID;
+        m_PID = other.m_PID;
     }
 
     ProfileResult(const std::string& name, nanosec& start, nanosec& end,
                     pid_t& threadid, pid_t& pid)
-        : Name(name), Start(start), End(end), ThreadID(threadid), PID(pid)
+        : m_Name(name), m_Start(start), m_End(end), m_ThreadID(threadid), m_PID(pid)
         {}
 
     ProfileResult() {}
 
-    std::string Name;
-    nanosec Start;
-    nanosec End;
-    pid_t ThreadID;
-    pid_t PID;
+    std::string m_Name;
+    nanosec m_Start;
+    nanosec m_End;
+    pid_t m_ThreadID;
+    pid_t m_PID;
 };
 
 class ProfQueue
 {
     private:
         std::deque<ProfileResult> m_Tasks;
-        bool m_done;
+        bool m_Done;
         pthread_mutex_t m_Mutex;
-        pthread_cond_t m_Ready;
+        pthread_cond_t m_ReadyCondition;
 
         ProfQueue& operator=(const ProfQueue&);
 
     public:
-        ProfQueue() : m_Tasks{}, m_done(false), m_Mutex(PTHREAD_MUTEX_INITIALIZER)
+        ProfQueue() : m_Tasks{}, m_Done(false), m_Mutex(PTHREAD_MUTEX_INITIALIZER)
         {
             pthread_mutex_init(&m_Mutex, NULL);
-            pthread_cond_init(&m_Ready, NULL);
+            pthread_cond_init(&m_ReadyCondition, NULL);
         }
 
         ProfQueue(const ProfQueue&) { }
 
         ~ProfQueue()
         {
-            pthread_cond_destroy(&m_Ready);
+            pthread_cond_destroy(&m_ReadyCondition);
             pthread_mutex_destroy(&m_Mutex);
         }
 
         void done()
         {
             pthread_mutex_lock(&m_Mutex);
-            m_done = true;
+            m_Done = true;
             pthread_mutex_unlock(&m_Mutex);
 
-            pthread_cond_broadcast(&m_Ready);
+            pthread_cond_broadcast(&m_ReadyCondition);
         }
 
         bool Pop(ProfileResult& prof)
         {
             pthread_mutex_lock(&m_Mutex);
-            while(m_Tasks.empty() && !m_done)
+            while(m_Tasks.empty() && !m_Done)
             {
-                pthread_cond_wait(&m_Ready, &m_Mutex);
+                pthread_cond_wait(&m_ReadyCondition, &m_Mutex);
             }
 
             if(m_Tasks.empty())
             {
                 pthread_mutex_unlock(&m_Mutex);
-                prof.End = 0;
+                prof.m_End = 0;
                 return false;
             }
 
@@ -168,14 +168,14 @@ class ProfQueue
 
             if(pthread_mutex_trylock(&m_Mutex))
             {
-                prof.End = 0;
+                prof.m_End = 0;
                 return false;
             }
 
             if(m_Tasks.empty())
             {
                 pthread_mutex_unlock(&m_Mutex);
-                prof.End = 0;
+                prof.m_End = 0;
                 return false;
             }
 
@@ -193,7 +193,7 @@ class ProfQueue
             m_Tasks.push_back(std::move(prof));
             pthread_mutex_unlock(&m_Mutex);
 
-            pthread_cond_signal(&m_Ready);
+            pthread_cond_signal(&m_ReadyCondition);
         }
 
         bool TryPush(ProfileResult&& prof)
@@ -206,7 +206,7 @@ class ProfQueue
 
             pthread_mutex_unlock(&m_Mutex);
 
-            pthread_cond_signal(&m_Ready);
+            pthread_cond_signal(&m_ReadyCondition);
 
             return true;
         }
@@ -233,12 +233,12 @@ public:
     {
 
         ProfileResult result;
-        result.End = 0;
+        result.m_End = 0;
         std::vector<ProfQueue>& queue = *results_queue;
 
         m_json_stream.open(m_json_filename, std::fstream::app);
 
-        while (!stopRequested())
+        while (!StopRequested())
         {
             // Steal tasks
             for(size_t queueIndex = 0; queueIndex != results_queue->size(); ++ queueIndex)
@@ -250,7 +250,7 @@ public:
             }
 
             // Otherwise wait for ours
-            if(!result.End && !queue[writer_index].Pop(result))
+            if(!result.m_End && !queue[writer_index].Pop(result))
             {
                 // Once done, just wait for the thread to be stopped
                 continue;
@@ -302,11 +302,11 @@ public:
 
             // creates timing entry to the JSON file that is read by Chrome.
             m_json_stream
-                << "{\"cat\":\"function\",\"dur\":"<< (result.End - result.Start)
-                << ",\"name\":\"" << result.Name
-                << "\",\"ph\":\"X\",\"pid\":" << result.PID
-                << ",\"tid\":" << result.ThreadID
-                << ",\"ts\":" << result.Start << "}";
+                << "{\"cat\":\"function\",\"dur\":"<< (result.m_End - result.m_Start)
+                << ",\"name\":\"" << result.m_Name
+                << "\",\"ph\":\"X\",\"pid\":" << result.m_PID
+                << ",\"tid\":" << result.m_ThreadID
+                << ",\"ts\":" << result.m_Start << "}";
 
             /* flush here so data isn't lost in case of crash */
             m_json_stream.flush();
@@ -364,8 +364,8 @@ public:
     }
 
     ProfPool(const std::string& json_profile_path = "PROCESS_PROFILE_RESULTS")
-    : json_file_name(json_profile_path + JSON_EXT),
-      full_json(json_file_name, std::ofstream::trunc), m_PushIndex(0),
+    : m_Profile_File_Name(json_profile_path + JSON_EXT),
+      m_Profile_JSON(m_Profile_File_Name, std::ofstream::trunc), m_PushIndex(0),
       m_NumQueues(sysconf(_SC_NPROCESSORS_ONLN)), m_Queues(m_NumQueues)
     {
         WriteHeader();
@@ -404,8 +404,8 @@ public:
 
     void WriteHeader()
     {
-        full_json << "{\"otherData\": {},\"traceEvents\":\n    [";
-        full_json.flush();
+        m_Profile_JSON << "{\"otherData\": {},\"traceEvents\":\n    [";
+        m_Profile_JSON.flush();
     }
 
 
@@ -413,20 +413,20 @@ public:
     {
         bool first = true;
 
-        if(!full_json.is_open())
+        if(!m_Profile_JSON.is_open())
         {
-            std::cout << "full_json is not open!!\n";
+            std::cout << "m_Profile_JSON is not open!!\n";
         }
 
         for(ProfileWriter& writer: m_Writers)
         {
             if(!first)
             {
-                full_json << ",";
+                m_Profile_JSON << ",";
             }
             first = false;
-            full_json << writer;
-            full_json.flush();
+            m_Profile_JSON << writer;
+            m_Profile_JSON.flush();
         }
     }
 
@@ -436,13 +436,13 @@ public:
            "]}" can just be manually added to the end of the json file
         */
 
-        if(!full_json.is_open())
+        if(!m_Profile_JSON.is_open())
         {
-            std::cout << "full_json is not open!!\n";
+            std::cout << "m_Profile_JSON is not open!!\n";
         }
 
-        full_json << "\n    ]\n}";
-        full_json.close();
+        m_Profile_JSON << "\n    ]\n}";
+        m_Profile_JSON.close();
     }
 
     static ProfPool& Instance()
@@ -457,8 +457,8 @@ private:
     ProfPool& operator=(const ProfPool&);
 
     private:
-        std::string json_file_name;
-        std::ofstream full_json;
+        std::string m_Profile_File_Name;
+        std::ofstream m_Profile_JSON;
         size_t m_PushIndex;
         size_t m_NumQueues;
         std::vector<ProfileWriter> m_Writers;
@@ -470,7 +470,7 @@ class Timer
 
 public:
     Timer(const char* name)
-        :Name(name), stopped(false), startTimepoint(now())
+        :m_Name(name), m_Stopped(false), m_Start(now())
     {
         // Introduce timer delays so we can test optimizations
         // Delay everything except function you want to see if an
@@ -480,7 +480,7 @@ public:
 
     ~Timer()
     {
-        if (!stopped)
+        if (!m_Stopped)
         {
             /* Stop in destructor to measure full function time */
             Stop();
@@ -496,10 +496,10 @@ public:
 
         pid_t pid = getpid();
 
-        ProfileResult result = ProfileResult( Name, startTimepoint, endTime, threadID, pid );
+        ProfileResult result = ProfileResult( m_Name, m_Start, endTime, threadID, pid );
 
         ProfPool::Instance().Log(std::move(result));
-        stopped = true;
+        m_Stopped = true;
     }
 
 private:
@@ -527,9 +527,9 @@ private:
     }
 private:
 
-    const std::string Name;
-    bool stopped;
-    nanosec startTimepoint;
+    const std::string m_Name;
+    bool m_Stopped;
+    nanosec m_Start;
 };
 
 #endif
