@@ -40,7 +40,7 @@ typedef uint64_t nanosec;
 
 static const std::string JSON_EXT = ".json";
 
-#define SEC_TO_NS(SEC) (static_cast<nanosec>(SEC) * 1000000000)
+#define SEC_TO_NS(SEC) (static_cast<nanosec>(SEC) * 1000000000U)
 
 // macro to avoid templating a function
 #define SSTR( x ) static_cast< std::ostringstream & >( \
@@ -609,6 +609,9 @@ public:
         Stop();
     }
 
+
+private:
+
     void Stop()
     {
         nanosec end_time = now();
@@ -623,7 +626,6 @@ public:
         ProfPool::Instance().Log(result);
     }
 
-private:
     nanosec now()
     {
         nanosec nano_seconds = 0; // If unchanged then inidcates error
@@ -638,7 +640,6 @@ private:
 
         return nano_seconds;
     }
-private:
 
     const std::string m_Name;
     nanosec m_Start;
