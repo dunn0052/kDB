@@ -1,35 +1,28 @@
 #ifndef _PTHREAD_PROFILER_HH
 #define _PTHREAD_PROFILER_HH
 
-// View data by dragging JSON file to a chrome://tracing
+/* View data by loading JSON file to chrome://tracing
 
-// For CPP 98 -- The profiler must be initialized in the main thread or
-// there is danger of the ProfPool being multi-initialized
+ * For CPP 0X -- The profiler must be initialized in the main thread or
+ * there is danger of the ProfPool being multi-initialized.
 
-/* Usage: Call PROFILE_FUNCTION() or PROFILE_SCOPE() to start profiling.
+ * Usage: Call PROFILE_FUNCTION() or PROFILE_SCOPE() to start profiling.
  * START_PROFILING() can be called to start the profiler threads without
  * logging profile metrics.
 
- * Notes: If program dies before ProfileWriter::EndSession() is called, the profile data will still be available,
- * but will be missing a ]} at the end of the file. Append a ]} at the end and it will fix this issue.
- * This cannot be controlled as destructors are not called upon a program being killed.
+ * Notes: If program dies before the profiler destructor is called the
+ * individual writer files will still be around and you can manually combine
+ * all of them together.
  */
 
 #include <string>
 #include <fstream>
 #include <sstream>
-
 #include <pthread.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <sys/syscall.h>
-#include <errno.h>  // `errno`
-#include <stdint.h> // `UINT64_MAX`
-#include <stdio.h>  // `printf()`
-#include <string.h> // `strerror(errno)`
-#include <time.h>   // `clock_gettime()` and `timespec_get()`
+#include <unistd.h> // getpid()
+#include <sys/syscall.h> // __NR_getid
+#include <time.h>
 #include <queue>
-#include <iostream>
 
 // Program name for profile json
 // Not portable outside of glibc
@@ -40,11 +33,8 @@ typedef uint64_t nanosec;
 
 static const std::string JSON_EXT = ".json";
 
-#define SEC_TO_NS(SEC) (static_cast<nanosec>(SEC) * 1000000000U)
 
-// macro to avoid templating a function
-#define SSTR( x ) static_cast< std::ostringstream & >( \
-    ( std::ostringstream() << std::dec << x ) ).str()
+
 
 // Profiling on 1; Profiling off 0
 #define PROFILING 1
@@ -451,6 +441,12 @@ public:
 
     void Log(ProfileResult& result)
     {
+        if(!m_Ready)
+        {
+            // Bail out to avoid accessing the queue array
+            return;
+        }
+
         // Keep moving where we start pushing to spread between queues
         m_PushIndex++; // May need to reset to avoid possible integer overflow?
 
@@ -471,30 +467,42 @@ public:
     // Writes final data so may lag closing the profiled program
     ~ProfPool()
     {
-        Stop();
-        WriteProfileData();
-        WriteFooter();
-        m_Profile_JSON.close();
+        if(m_Ready)
+        {
+            Stop();
+            WriteProfileData();
+            WriteFooter();
+            m_Profile_JSON.close();
+        }
     }
+
+#define SSTR( x ) static_cast< std::ostringstream & >( \
+    ( std::ostringstream() << std::dec << x ) ).str()
 
     static ProfPool& Instance()
     {
-        /* Singleton instance*/
-        static ProfPool instance(std::string(program_invocation_short_name) + "_" + SSTR(getpid()));
+        /* Singleton instance - must be initialized in main thread */
+        static ProfPool instance(
+            std::string(program_invocation_short_name) + "_" + SSTR(getpid()));
         return instance;
     }
+
+#undef SSTR
 
 private:
 
     ProfPool(const std::string& json_profile_path = "PROCESS_PROFILE_RESULTS")
     : m_Profile_File_Name(json_profile_path + JSON_EXT),
-      m_PushIndex(0),
-      m_NumQueues(4/*sysconf(_SC_NPROCESSORS_ONLN) - 1*/), m_Queues(m_NumQueues)
+      m_PushIndex(0), m_NumQueues(4/*sysconf(_SC_NPROCESSORS_ONLN) - 1*/),
+      m_Queues(m_NumQueues), m_Ready(false)
     {
         m_Profile_JSON.open(m_Profile_File_Name.c_str(), std::ofstream::trunc);
         if(!m_Profile_JSON.is_open())
         {
-            std::cout << "Could not create: " << m_Profile_File_Name << "\nProfiling FAILED!";
+            std::cout << "Could not create: "
+                      << m_Profile_File_Name
+                      << "\nProfiling FAILED!";
+            m_Ready = false;
             return;
         }
 
@@ -520,12 +528,16 @@ private:
             thread_retcode = m_Writers[writer_index].Start(&m_Queues);
             if(0 != thread_retcode)
             {
-                // Something went wrong so report and exit;
+                // Something went wrong and deadlocks will occur. Just bail out.
                 m_Profile_JSON << "Profiler startup FAILED!";
                 m_Profile_JSON.close();
+                Stop();
+                m_Ready = false;
                 return;
             }
         }
+
+        m_Ready = true;
     }
 
     void Stop()
@@ -588,6 +600,7 @@ private:
         size_t m_NumQueues;
         std::vector<ProfileWriter> m_Writers;
         std::vector<ProfQueue> m_Queues;
+        bool m_Ready;
 };
 
 // Probe for timing - Starts at construction and stops on destruction
@@ -626,6 +639,8 @@ private:
         ProfPool::Instance().Log(result);
     }
 
+#define SEC_TO_NS(SEC) (static_cast<nanosec>(SEC) * 1000000000U)
+
     nanosec now()
     {
         nanosec nano_seconds = 0; // If unchanged then inidcates error
@@ -640,6 +655,7 @@ private:
 
         return nano_seconds;
     }
+#undef SEC_TO_NS
 
     const std::string m_Name;
     nanosec m_Start;
