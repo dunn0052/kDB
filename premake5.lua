@@ -264,10 +264,8 @@ project "Profiler"
         projincpath
     }
 
-
     links
     {
-        "Logger",
         "Threads::Threads"
     }
 
