@@ -1,8 +1,8 @@
 #include <retcode.hh>
 #include <Logger.hh>
 #include <CLI.hh>
-#include <profiler.hh>
-//#include <pthread_profiler.hh>
+//#include <profiler.hh>
+#include <pthread_profiler.hh>
 #include <chrono>
 #include <thread>
 
@@ -26,7 +26,7 @@ void thread_func(int max_sleep_time)
 
 int main(int argc, char* argv[])
 {
-    PROFILE_FUNCTION();
+    START_PROFILING();
     static const bool running = true;
     static uint64_t loop_count = 0;
 

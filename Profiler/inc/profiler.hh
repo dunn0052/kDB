@@ -216,7 +216,7 @@ class ProfileWriter : public DaemonThread<std::vector<ProfQueue>*>
 {
 
 private:
-    int profileCount;
+    int m_ProfileCount;
     bool closed;
     std::fstream m_json_stream;
     std::string m_json_filename;
@@ -269,7 +269,7 @@ public:
     }
 
     ProfileWriter(const std::string& filepath, int writer_id)
-        : profileCount(0), closed(false),
+        : m_ProfileCount(0), closed(false),
           m_json_filename(filepath), writer_index(writer_id)
         {
         }
@@ -285,7 +285,7 @@ public:
     void EndSession()
     {
         m_json_stream.close();
-        profileCount = 0;
+        m_ProfileCount = 0;
         closed = true;
         remove(m_json_filename.c_str());
     }
@@ -295,7 +295,7 @@ public:
         if(!closed)
         {
             /* next item timed */
-            if (profileCount++ > 0)
+            if (m_ProfileCount++ > 0)
             {
                 m_json_stream << ",\n";
             }
