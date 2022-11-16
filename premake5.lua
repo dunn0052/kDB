@@ -264,7 +264,6 @@ project "Profiler"
         projincpath
     }
 
-
     links
     {
         "Threads::Threads"
@@ -301,6 +300,11 @@ project "SystemProfiler"
         "Threads::Threads"
     }
 
+    defines
+    {
+        "__ENABLE_PROFILING"
+    }
+
 
 filter "configurations:Debug"
     defines "_ENABLE_LOGGING"
@@ -311,7 +315,7 @@ filter "configurations:Release"
     optimize "Speed"
 
 filter "configurations:Performance"
-    --defines "Performance logging define"
+    defines "__ENABLE_PROFILING"
     optimize "Speed"
 
 filter "configurations:Distribution"
