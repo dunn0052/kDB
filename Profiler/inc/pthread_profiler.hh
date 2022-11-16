@@ -18,6 +18,7 @@
 #include <string>
 #include <fstream>
 #include <sstream>
+#include <iostream>
 #include <pthread.h>
 #include <unistd.h> // getpid()
 #include <sys/syscall.h> // __NR_getid
@@ -29,18 +30,18 @@
 extern char *program_invocation_name;
 extern char *program_invocation_short_name;
 
-typedef uint64_t nanosec;
+typedef __uint64_t nanosec;
 
 static const std::string JSON_EXT = ".json";
 
-
-
-
+#if 0
 // Profiling on 1; Profiling off 0
 #define PROFILING 1
 #ifdef PROFILING
+#endif
+#endif
 
-
+#ifdef __ENABLE_PROFILING
 // linux only!!
 #define FUNCTION_SIG __PRETTY_FUNCTION__
 
@@ -48,7 +49,7 @@ static const std::string JSON_EXT = ".json";
 #define PROFILE_SCOPE( NAME ) Timer timer##_LINE_( NAME )
 // Profile with function name - place at function entry
 #define PROFILE_FUNCTION() PROFILE_SCOPE(FUNCTION_SIG)
-// Used for intializing profiling without profiling the scope itself
+// Used for initializing profiling without profiling the scope itself
 #define START_PROFILING()  ProfPool::Instance()
 
 #else
