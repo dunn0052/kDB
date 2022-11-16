@@ -264,11 +264,14 @@ project "Profiler"
         projincpath
     }
 
-
     links
     {
-        "Logger",
         "Threads::Threads"
+    }
+
+    defines
+    {
+        "__ENABLE_PROFILING"
     }
 
 
@@ -281,7 +284,7 @@ filter "configurations:Release"
     optimize "Speed"
 
 filter "configurations:Performance"
-    --defines "Performance logging define"
+    defines "__ENABLE_PROFILING"
     optimize "Speed"
 
 filter "configurations:Distribution"
