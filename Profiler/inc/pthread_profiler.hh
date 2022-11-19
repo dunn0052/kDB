@@ -1,10 +1,12 @@
+// Author: Kevin Dunn 2022
+
 #ifndef _PTHREAD_PROFILER_HH
 #define _PTHREAD_PROFILER_HH
 
-/* View data by loading JSON file to chrome://tracing
+/* View data by loading the resulting JSON file to chrome://tracing
 
- * For CPP 0X -- The profiler must be initialized in the main thread or
- * there is danger of the ProfPool being multi-initialized.
+ * For C++ 0X -- The profiler must be initialized in the main thread or
+ * there is danger of the ProfPool singleton being multi-initialized.
 
  * Usage: Call PROFILE_FUNCTION() or PROFILE_SCOPE() to start profiling.
  * START_PROFILING() can be called to start the profiler threads without
@@ -14,6 +16,31 @@
  * individual writer files will still be around and you can manually combine
  * all of them together.
  */
+
+
+/* CMAKE: add_definitions(-D__ENABLE_PROFILING) */
+#ifdef __ENABLE_PROFILING
+// linux only!!
+#define FUNCTION_SIG __PRETTY_FUNCTION__
+
+#define CAT_(A, B) A ## B
+#define CAT(A, B) CAT_(A, B)
+#define UNIQUE_LOCAL( VARIABLE ) CAT( VARIABLE, __LINE__)
+
+// Profile a scope such as a tight loop in a function
+#define PROFILE_SCOPE( NAME ) Timer UNIQUE_LOCAL(timer)( NAME )
+// Profile with function name - place at function entry
+#define PROFILE_FUNCTION() PROFILE_SCOPE(FUNCTION_SIG)
+// Used for initializing profiling without profiling the scope itself
+#define START_PROFILING()  ProfPool::Instance()
+
+#else
+
+// If __ENABLE_PROFILING isn't set then all is simply compiled out of the build
+    #define PROFILE_SCOPE( NAME )
+    #define PROFILE_FUNCTION()
+    #define START_PROFILING()
+#endif
 
 #include <string>
 #include <fstream>
@@ -34,38 +61,13 @@ typedef __uint64_t nanosec;
 
 static const std::string JSON_EXT = ".json";
 
-#if 0
-// Profiling on 1; Profiling off 0
-#define PROFILING 1
-#ifdef PROFILING
-#endif
-#endif
-
-#ifdef __ENABLE_PROFILING
-// linux only!!
-#define FUNCTION_SIG __PRETTY_FUNCTION__
-
-// Profile a named scope like thread loop
-#define PROFILE_SCOPE( NAME ) Timer timer##_LINE_( NAME )
-// Profile with function name - place at function entry
-#define PROFILE_FUNCTION() PROFILE_SCOPE(FUNCTION_SIG)
-// Used for initializing profiling without profiling the scope itself
-#define START_PROFILING()  ProfPool::Instance()
-
-#else
-
-// If _ENABLE_PROFILING isn't set then all is simply compiled out of the build
-    #define PROFILE_SCOPE( NAME )
-    #define PROFILE_FUNCTION()
-    #define START_PROFILING()
-#endif
 
 struct ProfileResult
 {
     ProfileResult(const ProfileResult& other)
         : m_Name(other.m_Name), m_Start(other.m_Start),
           m_End(other.m_End), m_ThreadID(other.m_ThreadID),
-          m_PID(other.m_PID)
+          m_ProcessName(other.m_ProcessName)
     {
 
     }
@@ -76,15 +78,15 @@ struct ProfileResult
         m_Start = other.m_Start;
         m_End = other.m_End;
         m_ThreadID = other.m_ThreadID;
-        m_PID = other.m_PID;
+        m_ProcessName = other.m_ProcessName;
         return *this;
     }
 
 
     ProfileResult(const std::string& name, nanosec& start, nanosec& end,
-                  pid_t& threadid, pid_t& pid)
+                  pid_t& threadid, const std::string& processName)
         : m_Name(name), m_Start(start), m_End(end), m_ThreadID(threadid),
-          m_PID(pid)
+          m_ProcessName(processName)
         {
 
         }
@@ -95,7 +97,7 @@ struct ProfileResult
     nanosec m_Start;
     nanosec m_End;
     pid_t m_ThreadID;
-    pid_t m_PID;
+    std::string m_ProcessName;
 };
 
 class ProfQueue
@@ -358,7 +360,9 @@ public:
     {
         if (!m_Running)
         {
-            EndSession();
+            // We've already extracted the file contents
+            // to the main profiler json. No need for them now.
+            remove(m_json_filename.c_str());
         }
     }
 
@@ -366,7 +370,6 @@ private:
 
     void EndSession()
     {
-        remove(m_json_filename.c_str());
     }
 
     void WriteProfile(const ProfileResult& result)
@@ -385,8 +388,8 @@ private:
         m_JSON_Stream
             << "{\"cat\":\"function\",\"dur\":"<< (result.m_End - result.m_Start)
             << ",\"name\":\"" << result.m_Name
-            << "\",\"ph\":\"X\",\"pid\":" << result.m_PID
-            << ",\"tid\":" << result.m_ThreadID
+            << "\",\"ph\":\"X\",\"pid\":\"" << result.m_ProcessName
+            << "\",\"tid\":" << result.m_ThreadID
             << ",\"ts\":" << result.m_Start
             << "}";
 
@@ -444,7 +447,7 @@ public:
     {
         if(!m_Ready)
         {
-            // Bail out to avoid accessing the queue array
+            // Bail out to avoid accessing the empty queue array
             return;
         }
 
@@ -463,6 +466,8 @@ public:
         // All queues are busy, just wait until free
         m_Queues[m_PushIndex % m_Queues.size()].Push(result);
     }
+
+    inline std::string ProcessName() { return m_Process_ID; }
 
     // Destructor called on program exit
     // Writes final data so may lag closing the profiled program
@@ -483,20 +488,23 @@ public:
     static ProfPool& Instance()
     {
         /* Singleton instance - must be initialized in main thread */
-        static ProfPool instance(
-            std::string(program_invocation_short_name) + "_" + SSTR(getpid()));
+        static ProfPool instance;
         return instance;
     }
 
-#undef SSTR
-
 private:
 
-    ProfPool(const std::string& json_profile_path = "PROCESS_PROFILE_RESULTS")
-    : m_Profile_File_Name(json_profile_path + JSON_EXT),
-      m_PushIndex(0), m_NumQueues(4/*sysconf(_SC_NPROCESSORS_ONLN) - 1*/),
-      m_Queues(m_NumQueues), m_Ready(false)
+    ProfPool(const std::string& file_path = "", bool profiling_enabled = true,
+        size_t num_threads = 4)
+    : m_Process_ID(std::string(program_invocation_name) + "_" + SSTR(getpid())),
+      m_Profile_File_Name(file_path + m_Process_ID + JSON_EXT), m_PushIndex(0),
+      m_NumQueues(num_threads), m_Queues(m_NumQueues), m_Ready(profiling_enabled)
     {
+        if(!profiling_enabled)
+        {
+            return;
+        }
+
         m_Profile_JSON.open(m_Profile_File_Name.c_str(), std::ofstream::trunc);
         if(!m_Profile_JSON.is_open())
         {
@@ -510,14 +518,19 @@ private:
         WriteHeader();
 
         std::stringstream profile_name;
-        pid_t pid = getpid();
 
         // Note: number of writers MUST == number of queues otherwise will run
         // into deadlock
         for(size_t writer_index = 0; writer_index < m_NumQueues; writer_index++)
         {
-            profile_name << "PROF_" << pid << "_" << writer_index << JSON_EXT;
-            ProfileWriter writer = ProfileWriter(profile_name.str(), writer_index);
+            profile_name
+                << file_path
+                << m_Process_ID
+                << "_"
+                << writer_index
+                << JSON_EXT;
+
+            ProfileWriter writer = ProfileWriter((profile_name).str(), writer_index);
             m_Writers.push_back(writer);
             profile_name.str("");
         }
@@ -537,9 +550,9 @@ private:
                 return;
             }
         }
-
-        m_Ready = true;
     }
+
+#undef SSTR
 
     void Stop()
     {
@@ -590,11 +603,12 @@ private:
         m_Profile_JSON << "\n    ]\n}";
     }
 
-    // Private to enforce singelton pattern
+    // Private to enforce singleton pattern
     ProfPool(const ProfPool&);
     ProfPool& operator=(const ProfPool&);
 
     private:
+        std::string m_Process_ID;
         std::string m_Profile_File_Name;
         std::ofstream m_Profile_JSON;
         size_t m_PushIndex;
@@ -629,34 +643,32 @@ private:
     void Stop()
     {
         nanosec end_time = now();
+        // The process name is static so we set it here
+        static std::string processName = ProfPool::Instance().ProcessName();
 
         // This is Linux specific!!
         pid_t threadID = syscall(__NR_gettid);
 
-        pid_t pid = getpid();
-
-        ProfileResult result = ProfileResult( m_Name, m_Start, end_time, threadID, pid );
+        ProfileResult result = ProfileResult( m_Name, m_Start, end_time,
+            threadID, processName );
 
         ProfPool::Instance().Log(result);
     }
 
-#define SEC_TO_NS(SEC) (static_cast<nanosec>(SEC) * 1000000000U)
-
     nanosec now()
     {
-        nanosec nano_seconds = 0; // If unchanged then inidcates error
+        nanosec nano_seconds = 0; // If unchanged then indicates error
         struct timespec ts;
         int return_code = clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
 
         if (-1 != return_code)
         {
-            nano_seconds = SEC_TO_NS(ts.tv_sec) +
+            nano_seconds = ( static_cast<nanosec>(ts.tv_sec) * 1000000000U ) +
                 static_cast<nanosec>(ts.tv_nsec);
         }
 
         return nano_seconds;
     }
-#undef SEC_TO_NS
 
     const std::string m_Name;
     nanosec m_Start;
