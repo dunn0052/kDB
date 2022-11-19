@@ -2,15 +2,15 @@ workspace "DB"
 
     require "cmake" -- needed for cmake extension
 
+--[[
     platforms
     {
         "rpi" -- Needed for arm64 architecture
-        --[[
         "Linux",
         "Windows",
         "MacOS"
-        ]]
     }
+]]
 
     configurations
     {
@@ -320,7 +320,8 @@ filter "configurations:Performance"
 
 filter "configurations:Distribution"
     optimize "Speed"
-
+--[[
 filter "platforms:rpi"
     architecture "arm64"
     system "linux"
+]]
