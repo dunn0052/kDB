@@ -368,10 +368,6 @@ public:
 
 private:
 
-    void EndSession()
-    {
-    }
-
     void WriteProfile(const ProfileResult& result)
     {
         /* next item timed */

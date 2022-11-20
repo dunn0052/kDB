@@ -268,12 +268,10 @@ project "Profiler"
     {
         "Threads::Threads"
     }
-
     defines
     {
         "__ENABLE_PROFILING"
     }
-
 
 filter "configurations:Debug"
     defines "_ENABLE_LOGGING"

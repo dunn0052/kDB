@@ -1,7 +1,7 @@
 #include <retcode.hh>
 #include <CLI.hh>
-//#include <profiler.hh>
-#include <pthread_profiler.hh>
+#include <profiler.hh>
+//#include <pthread_profiler.hh>
 #include <chrono>
 #include <thread>
 
