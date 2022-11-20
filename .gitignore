@@ -44,7 +44,7 @@ lib/
 CMakeCache.*
 Makefile
 CMakeFiles/
-CMakeLists.*
+**/CMakeLists.txt
 
 #vscode
 .vscode/
@@ -56,3 +56,6 @@ CMakeLists.*
 db/inc/*
 db/db/*
 *.db
+
+#profiler
+*.json

@@ -36,7 +36,7 @@ function m.files(prj)
     local tr = project.getsourcetree(prj)
     tree.traverse(tr, {
         onleaf = function(node, depth)
-            _p(depth, '"%s"', path.getrelative(prj.workspace.location, node.abspath))
+            _p(depth, '"%s"', path.getrelative(prj.location, node.abspath))
         end
     }, true)
 end
@@ -47,6 +47,7 @@ end
 function m.generate(prj)
     p.utf8()
     p.w('cmake_minimum_required(VERSION 3.16)')
+    _p('Project("%s")', prj.name)
     p.w()
 
     -- if kind is only defined for configs, promote to project
@@ -245,6 +246,16 @@ function m.generate(prj)
             _p('if(CMAKE_BUILD_TYPE STREQUAL %s)', cmake.cfgname(cfg))
             _p('target_precompile_headers("%s" PUBLIC %s)', prj.name, pch)
             _p('endif()')
+        end
+
+        if(cfg.symbols ~= nil and cfg.symbols == "On") then
+            _p("set(CMAKE_C_FLAGS_%s %s)", string.upper(cmake.cfgname(cfg)), "-g3")
+            _p("set(CMAKE_CXX_FLAGS_%s %s)", string.upper(cmake.cfgname(cfg)), "-g3")
+        end
+
+        if(cfg.optomize ~= nil and cfg.optomize == "On") then
+            _p("set(CMAKE_C_FLAGS_%s %s)", string.upper(cmake.cfgname(cfg)), "-O3 -DNDEBUG")
+            _p("set(CMAKE_CXX_FLAGS_%s %s)", string.upper(cmake.cfgname(cfg)), "-O3 -DNDEBUG")
         end
     end
 end

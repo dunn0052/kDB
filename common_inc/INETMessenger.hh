@@ -2,7 +2,7 @@
 #define INETMESSENGER__HH
 #include <retcode.hh>
 #include <DOFRI.hh>
-#include <StoppableTask.hh>
+#include <DaemonThread.hh>
 
 #include <vector>
 #include <string>
@@ -54,7 +54,7 @@ public:
         // Need to non-block this so we can check for daemon stop
         fcntl(listening_socket, F_SETFL, O_NONBLOCK);
 
-        while (stopRequested() == false)
+        while (StopRequested() == false)
         {
             accept_socket = accept(listening_socket,
                             (struct sockaddr *)&incoming_accepted_address,
@@ -216,7 +216,7 @@ public:
             // Start listening for connections
             listen(m_ListeningSocket, listenQueueSize);
 
-            m_AcceptTask.start(m_ListeningSocket, &m_AcceptSocketsQueue);
+            m_AcceptTask.Start(m_ListeningSocket, &m_AcceptSocketsQueue);
 
             m_IsAccepting = true;
 

@@ -96,9 +96,9 @@ function m.generate(wks)
             local prj = n.project
 
             -- Build a relative path from the workspace file to the project file
-            local prjpath = p.filename(prj, ".cmake")
-            prjpath = path.getrelative(prj.workspace.location, prjpath)
-            p.w('include(%s)', prjpath)
+            local prjpath = p.filename(prj, "CMakeLists.txt")
+            prjpath = path.getrelative(prj.workspace.location, prj.location)
+            p.w('add_subdirectory(%s)', prjpath)
         end,
 
         --TODO wks.startproject

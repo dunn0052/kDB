@@ -32,7 +32,7 @@ function cmake.generateProject(prj)
     p.indent("  ")
 
     if project.isc(prj) or project.iscpp(prj) then
-        p.generate(prj, ".cmake", cmake.project.generate)
+        p.generate(prj, "CMakeLists.txt", cmake.project.generate)
     end
 end
 
@@ -50,7 +50,7 @@ function cmake.cleanWorkspace(wks)
 end
 
 function cmake.cleanProject(prj)
-    p.clean.file(prj, prj.name .. ".cmake")
+    p.clean.file(prj, "CMakeLists.txt")
 end
 
 include("cmake_workspace.lua")

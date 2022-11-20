@@ -21,14 +21,14 @@ workspace "DB"
     }
 
 -- PATH MACROS
-outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
+outputdir = "%{cfg.buildcfg}"
 projectsrc = "%{prj.name}/src/**.cpp"
 projectinc ="%{prj.name}/inc/*.hh" -- private headers
 projincpath ="%{prj.name}/inc/" -- private header path
 commoninc = "common_inc/"
-targetbuilddir = "bin/" .. outputdir .. "/%{prj.name}"
-sharedbuildlibs = "bin/" .. outputdir .. "/lib/"
-intermediatedir = "bin-intermediates/" ..outputdir .. "/%{prj.name}"
+targetbuilddir = outputdir .. "/bin/"
+sharedbuildlibs = outputdir .. "/lib/"
+intermediatedir = outputdir .. "bin-intermediates/%{prj.name}"
 dbincdir = "db/inc/"
 
 project "Logger"
@@ -240,6 +240,38 @@ project "Listener"
     {
     }
 
+project "Profiler"
+
+    location "Profiler"
+    kind "ConsoleApp"
+    language "C++"
+    cppdialect "C++17"
+    systemversion "latest" -- compiler version
+
+    targetdir(targetbuilddir)
+    objdir(intermediatedir)
+    libdirs(sharedbuildlibs)
+
+    files
+    {
+        projectsrc,
+        projectinc
+    }
+
+    includedirs
+    {
+        commoninc,
+        projincpath
+    }
+
+    links
+    {
+        "Threads::Threads"
+    }
+    defines
+    {
+        "__ENABLE_PROFILING"
+    }
 
 filter "configurations:Debug"
     defines "_ENABLE_LOGGING"
@@ -247,20 +279,15 @@ filter "configurations:Debug"
 
 filter "configurations:Release"
     defines "_ENABLE_LOGGING"
-    optimize "On"
+    optimize "Speed"
 
 filter "configurations:Performance"
-    --defines "Performance logging define"
-    optimize "On"
+    defines "__ENABLE_PROFILING"
+    optimize "Speed"
 
 filter "configurations:Distribution"
-    optimize "On"
+    optimize "Speed"
 
 filter "platforms:rpi"
     architecture "arm64"
-
-filter "platforms:Linux"
-    architecture "x64"
-
-filter "platforms:Windows"
-    architecture "x64"
+    system "linux"
