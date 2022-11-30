@@ -1,6 +1,6 @@
 #! /usr/bin/bash
 
-./vendor/premake/rpi/premake5 cmake
+./vendor/premake/rpi/premake5 --scripts=./vendor/premake/cmake/ cmake
 
 if [ $# -eq 0 ]
   then

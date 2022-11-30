@@ -46,6 +46,9 @@ Makefile
 CMakeFiles/
 **/CMakeLists.txt
 
+#gtest
+_deps
+
 #vscode
 .vscode/
 

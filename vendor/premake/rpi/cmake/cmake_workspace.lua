@@ -87,6 +87,21 @@ function m.generate(wks)
 
     p.w('project("%s")', wks.name)
 
+    if(INCLUDE_GTEST ~= nil) then
+        p.w()
+        p.w("include(FetchContent)")
+        p.w("FetchContent_Declare(")
+        p.w("    googletest")
+        p.w("    # Specify the commit you depend on and update it regularly.")
+        p.w("    URL https://github.com/google/googletest/archive/5376968f6948923e2411081fd9372e71a59d8e77.zip")
+        p.w(")")
+        p.w("# For Windows: Prevent overriding the parent project's compiler/linker settings")
+        p.w("set(gtest_force_shared_crt ON CACHE BOOL \"\" FORCE)")
+        p.w("FetchContent_MakeAvailable(googletest)")
+        p.w()
+    end
+
+
     --
     -- Project list
     --
