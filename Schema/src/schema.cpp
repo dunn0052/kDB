@@ -2,7 +2,10 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <compiler_defines.hh>
+#include <Constants.hh>
 
+
+/* Object info */
 RETCODE ParseObjectEntry(std::istringstream& line, OBJECT_SCHEMA& out_object)
 {
     line >> out_object;
@@ -15,7 +18,7 @@ RETCODE ParseObjectEntry(std::istringstream& line, OBJECT_SCHEMA& out_object)
 
     return RTN_OK;
 }
-
+/* Field info */
 RETCODE ParseFieldEntry(std::istringstream& line, FIELD_SCHEMA& out_field)
 {
     line >> out_field;
@@ -24,7 +27,7 @@ RETCODE ParseFieldEntry(std::istringstream& line, FIELD_SCHEMA& out_field)
         return RTN_NOT_FOUND;
     }
 
-    LOG_DEBUG("FIELD NUMBER: %u FIELD NAME: %s FIELD TYPE: %c", out_field.fieldNumber, out_field.fieldName.c_str(), out_field.fieldType);
+    LOG_DEBUG("FIELD NUMBER: %u FIELD NAME: %s FIELD TYPE: %c NUMBER OF ELEMENTS: %u", out_field.fieldNumber, out_field.fieldName.c_str(), out_field.fieldType, out_field.numElements);
 
     return RTN_OK;
 }
@@ -34,6 +37,7 @@ inline bool isComment(char firstChar)
     return '#' == firstChar;
 }
 
+/* Sentinal value for end of object definition is 0 */
 inline bool isEndOfObject(char firstChar)
 {
    return  '0' == firstChar;
@@ -41,13 +45,24 @@ inline bool isEndOfObject(char firstChar)
 
 static RETCODE GenerateObjectHeader(OBJECT_SCHEMA& object, std::ofstream& headerFile)
 {
-    headerFile << "\n\n#define O_" << std::uppercase << object.objectName << "_NUM_RECORDS " << object.numberOfRecords;
-    headerFile << "\n\nstruct " << std::uppercase << object.objectName << "\n{";
+    /* Header guard */
+    headerFile << "#ifndef " << std::uppercase << object.objectName << "__HH";
+    headerFile << "\n#define " << std::uppercase << object.objectName << "__HH";
+    headerFile << "\n\n#include <DOFRI.hh>\n"; // maybe..
+
+    headerFile << "\n\nstatic const size_t O_" << std::uppercase << object.objectName << "_NUM_RECORDS = " << object.numberOfRecords << ";";
+    headerFile << "\n\n#pragma pack (4)";
+    headerFile << "\nstruct " << std::uppercase << object.objectName << "\n{";
+
+    if( headerFile.bad() )
+    {
+        return RTN_FAIL;
+    }
 
     return RTN_OK;
 }
 
-static bool generateDataType(FIELD_SCHEMA& field, std::string& dataType)
+static bool TryGenerateDataType(FIELD_SCHEMA& field, std::string& dataType)
 {
     // Sizings are not accurate because of struct padding
     switch(field.fieldType)
@@ -55,61 +70,51 @@ static bool generateDataType(FIELD_SCHEMA& field, std::string& dataType)
         case 'D': // Databse innacurate because its a string alias
         {
             dataType = "DATABASE";
-            field.fieldSize = sizeof(DATABASE);
             break;
         }
         case 'O': // Object
         {
             dataType = "OBJECT";
-            field.fieldSize = sizeof(OBJECT);
             break;
         }
         case 'F': // Field
         {
             dataType = "FIELD";
-            field.fieldSize = sizeof(FIELD);
             break;
         }
         case 'R': // Record
         {
             dataType = "RECORD";
-            field.fieldSize = sizeof(RECORD);
             break;
         }
         case 'I': // Index
         {
             dataType  = "INDEX";
-            field.fieldSize = sizeof(INDEX);
             break;
         }
         case 'C': // Char
         {
             dataType = "char";
-            field.fieldSize = sizeof(char);
             break;
         }
         case 'N': // signed integer
         {
             dataType = "int";
-            field.fieldSize = sizeof(int);
             break;
         }
         case 'U': // Unsigned integer
         {
             dataType = "unsigned int";
-            field.fieldSize = sizeof(unsigned int);
             break;
         }
         case 'B': // Bool
         {
             dataType = "bool";
-            field.fieldSize = sizeof(bool);
             break;
         }
         case 'Y': // Unsigned char (byte)
         {
             dataType = "unsigned char";
-            field.fieldSize = sizeof(unsigned char);
             break;
         }
         default:
@@ -121,23 +126,106 @@ static bool generateDataType(FIELD_SCHEMA& field, std::string& dataType)
     return true;
 }
 
+static bool TrySetFieldSize(FIELD_SCHEMA& field)
+{
+    // Sizings are not accurate because of struct padding
+    switch(field.fieldType)
+    {
+        case 'D': // Databse innacurate because its a string alias
+        {
+            field.fieldSize = sizeof(DATABASE);
+            break;
+        }
+        case 'O': // Object
+        {
+            field.fieldSize = sizeof(OBJECT);
+            break;
+        }
+        case 'F': // Field
+        {
+            field.fieldSize = sizeof(FIELD);
+            break;
+        }
+        case 'R': // Record
+        {
+            field.fieldSize = sizeof(RECORD);
+            break;
+        }
+        case 'I': // Index
+        {
+            field.fieldSize = sizeof(INDEX);
+            break;
+        }
+        case 'C': // Char
+        {
+            field.fieldSize = sizeof(char);
+            break;
+        }
+        case 'N': // signed integer
+        {
+            field.fieldSize = sizeof(int);
+            break;
+        }
+        case 'U': // Unsigned integer
+        {
+            field.fieldSize = sizeof(unsigned int);
+            break;
+        }
+        case 'B': // Bool
+        {
+            field.fieldSize = sizeof(bool);
+            break;
+        }
+        case 'Y': // Unsigned char (byte)
+        {
+            field.fieldSize = sizeof(unsigned char);
+            break;
+        }
+        default:
+        {
+            return false;
+        }
+    }
+
+    field.fieldSize *= field.numElements;
+
+    return true;
+}
+
 static RETCODE GenerateFieldHeader(FIELD_SCHEMA& field, std::ofstream& headerFile)
 {
     std::string dataType;
 
-    if( !generateDataType(field, dataType) )
+    if( !TryGenerateDataType(field, dataType) )
     {
         return RTN_NOT_FOUND;
     }
 
     if(field.numElements > 1)
     {
-            headerFile << "\n    " << dataType << " " << field.fieldName << "[" << field.numElements << "];";
-            field.fieldSize *= field.numElements;
+        /* Array of elements */
+        headerFile
+            << "\n    "
+            << dataType
+            << " "
+            << field.fieldName
+            << "["
+            << field.numElements
+            << "];";
     }
     else
     {
-            headerFile << "\n    " << dataType << " " << field.fieldName << ";";
+        headerFile
+            << "\n    "
+            << dataType
+            << " "
+            << field.fieldName
+            << ";";
+    }
+
+    if( headerFile.bad() )
+    {
+        return RTN_FAIL;
     }
 
     return RTN_OK;
@@ -145,15 +233,20 @@ static RETCODE GenerateFieldHeader(FIELD_SCHEMA& field, std::ofstream& headerFil
 
 RETCODE WriteObjectEnd( std::ofstream& headerFile )
 {
-    headerFile << "\n};";
+    headerFile << "\n};\n\n#endif";
+    if( headerFile.bad() )
+    {
+        return RTN_FAIL;
+    }
+
     return RTN_OK;
 }
 
-static RETCODE  GenerateDatabaseFile(OBJECT_SCHEMA& object_entry, const std::string& object_name)
+static RETCODE GenerateDatabaseFile(OBJECT_SCHEMA& object_entry, const std::string& object_name, const std::string& dbPath)
 {
     RETCODE retcode = RTN_OK;
     std::stringstream filepath;
-    filepath << "./db/db/" <<  object_entry.objectName << ".db";
+    filepath << INSTALL_DIR << dbPath <<  object_entry.objectName << DB_EXT;
     const std::string path = filepath.str();
     size_t fileSize = object_entry.objectSize * object_entry.numberOfRecords;
 
@@ -185,7 +278,9 @@ static RETCODE readAllDBHeader(OBJECT_SCHEMA& object_entry, std::vector<std::str
     bool entry_replaced = false;
     size_t lineNum = 1;
     std::ifstream headerStream;
-    headerStream.open("./common_inc/allDBs.hh");
+    std::stringstream allDBHeaderPath;
+    allDBHeaderPath << INSTALL_DIR << COMMON_INC_PATH << ALL_DB_HEADER_NAME << HEADER_EXT;
+    headerStream.open(allDBHeaderPath.str());
 
     if( !headerStream.is_open() )
     {
@@ -222,8 +317,10 @@ static RETCODE readAllDBHeader(OBJECT_SCHEMA& object_entry, std::vector<std::str
 
 static RETCODE writeAllDBHeader(std::vector<std::string>& out_lines)
 {
+    std::stringstream allDBHeaderPath;
+    allDBHeaderPath << INSTALL_DIR << COMMON_INC_PATH << ALL_DB_HEADER_NAME << HEADER_EXT;
     std::ofstream headerStream;
-    headerStream.open("./common_inc/allDBs.hh");
+    headerStream.open(allDBHeaderPath.str());
 
     if( !headerStream.is_open() )
     {
@@ -247,18 +344,139 @@ static RETCODE AddToAllDBHeader(OBJECT_SCHEMA& object_entry)
     RETCODE retcode = RTN_OK;
 
     retcode = readAllDBHeader(object_entry, out_lines);
+    std::stringstream allDBHeaderPath;
+    allDBHeaderPath << INSTALL_DIR << COMMON_INC_PATH << ALL_DB_HEADER_NAME << HEADER_EXT;
     if(RTN_OK != retcode)
     {
-        LOG_WARN("Could not open up allDBs.hh for reading!");
+        LOG_WARN("Could not open up %sfor reading!", allDBHeaderPath.str().c_str());
         return retcode;
     }
 
     retcode = writeAllDBHeader(out_lines);
     if(RTN_OK != retcode)
     {
-        LOG_WARN("Could not open up allDBs.hh for writing");
+        LOG_WARN("Could not open up %s for writing", allDBHeaderPath.str().c_str());
         return retcode;
     }
+
+    return retcode;
+}
+
+static RETCODE GenerateObject(const OBJECT& objectName, const std::string& skmPath, OBJECT_SCHEMA& out_object_entry)
+{
+    RETCODE retcode = RTN_OK;
+    std::string line;
+    size_t firstNonEmptyChar = 0;
+    char firstChar = 0;
+    bool parsingObjectEntry = false;
+    size_t currentLineNum = 0;
+
+    std::ifstream schemaFile;
+    std::stringstream schema_path;
+
+    schema_path << INSTALL_DIR << skmPath << objectName << SKM_EXT;
+
+
+    schemaFile.open(schema_path.str());
+
+    out_object_entry.objectSize = 0;
+
+    if( !schemaFile.is_open() )
+    {
+        LOG_WARN("Could not open %s", schema_path.str().c_str());
+        return RTN_NOT_FOUND;
+    }
+
+
+
+    while( std::getline(schemaFile, line) )
+    {
+        currentLineNum++;
+        firstNonEmptyChar = line.find_first_not_of(' ');
+        firstChar = line.at(firstNonEmptyChar);
+
+        if( isComment(firstChar) )
+        {
+            continue;
+        }
+
+        std::istringstream lineStream(line);
+
+        if( isEndOfObject(firstChar) )
+        {
+            parsingObjectEntry = false;
+            continue;
+        }
+
+        /* Start of object generation */
+        if( !parsingObjectEntry )
+        {
+            retcode |= ParseObjectEntry(lineStream, out_object_entry);
+            if( RTN_OK != retcode )
+            {
+                LOG_WARN("Error reading object entry: %s%s.skm:%d", skmPath.c_str(), objectName, currentLineNum);
+                return retcode;
+            }
+
+            parsingObjectEntry = true;
+            continue;
+        }
+        else
+        {
+            FIELD_SCHEMA field_entry;
+            retcode |= ParseFieldEntry(lineStream, field_entry);
+
+            if( RTN_OK != retcode )
+            {
+                LOG_WARN("Error reading field entry: %s%s.skm:%d", skmPath.c_str(), objectName, currentLineNum);
+                return retcode;
+            }
+
+            if(!TrySetFieldSize(field_entry))
+            {
+                LOG_WARN("Invalid field entry: %s%s.skm:%d", skmPath.c_str(), objectName, currentLineNum);
+                retcode |= RTN_NOT_FOUND;
+                return retcode;
+            }
+
+            out_object_entry.objectSize += field_entry.fieldSize;
+            out_object_entry.fields.push_back(field_entry);
+            continue;
+        }
+    }
+
+    if( schemaFile.bad() )
+    {
+        LOG_WARN("Error reading %s%s.skm", skmPath.c_str(), objectName);
+        retcode |= RTN_FAIL;
+    }
+
+    schemaFile.close();
+
+    return retcode;
+}
+
+static RETCODE GenerateHeaderFile(OBJECT_SCHEMA& object_entry, const std::string& header_file_path)
+{
+    std::ofstream headerFile;
+    RETCODE retcode = RTN_OK;
+
+    headerFile.open(header_file_path);
+    if( !headerFile.is_open() )
+    {
+        LOG_WARN("Could not open %s", header_file_path.c_str());
+        return RTN_NOT_FOUND;
+    }
+
+    retcode |= GenerateObjectHeader(object_entry, headerFile);
+    for(FIELD_SCHEMA& field : object_entry.fields)
+    {
+        retcode |= GenerateFieldHeader(field, headerFile);
+    }
+
+    retcode |= WriteObjectEnd(headerFile);
+
+    headerFile.close();
 
     return retcode;
 }
@@ -279,117 +497,43 @@ static RETCODE AddToAllDBHeader(OBJECT_SCHEMA& object_entry)
  *
 */
 
-RETCODE GenerateObjectDBFiles(const OBJECT& objectName)
+RETCODE GenerateObjectDBFiles(const OBJECT& objectName, const std::string& skmPath, const std::string& incPath)
 {
-    RETCODE retcode = RTN_OK;
-    std::string line;
-    size_t firstNonEmptyChar = 0;
-    char firstChar = 0;
-    bool parsingObjectEntry = false;
-    size_t currentLineNum = 0;
-
-    std::string skmPath("./db/skm/");
-    std::string incPath("./db/inc/");
-    std::ifstream schemaFile;
-    std::ofstream headerFile;
-
-    schemaFile.open(skmPath + objectName +".skm");
-    headerFile.open(incPath + objectName + ".hh", std::ofstream::trunc | std::ofstream::out );
-
     OBJECT_SCHEMA object_entry;
-    object_entry.objectSize = 0;
-
-    if( !schemaFile.is_open() )
+    RETCODE retcode = GenerateObject(objectName, skmPath, object_entry);
+    if( RTN_OK != retcode )
     {
-        LOG_WARN("Could not open %s%s.skm", skmPath.c_str(), objectName.c_str());
-        return RTN_NOT_FOUND;
+        LOG_WARN("Error generating %s", object_entry.objectName.c_str());
+        return retcode;
     }
 
-    if( !headerFile.is_open() )
+    std::stringstream header_path;
+    header_path << INSTALL_DIR << incPath << objectName << HEADER_EXT;
+    retcode |= GenerateHeaderFile(object_entry, header_path.str());
+    if( RTN_OK != retcode )
     {
-        LOG_WARN("Could not open %s%s.hh", incPath.c_str(),  objectName.c_str());
-        return RTN_NOT_FOUND;
+        LOG_WARN("Error generating %s.hh", object_entry.objectName.c_str());
+        return retcode;
     }
+    LOG_INFO("Generated %s.hh", object_entry.objectName.c_str());
 
-    headerFile << "#ifndef " << std::uppercase << objectName << "__HH";
-    headerFile << "\n#define " << std::uppercase << objectName << "__HH";
-    headerFile << "\n\n#include \"../../common_inc/DOFRI.hh\"\n";
-
-    while( std::getline(schemaFile, line) )
+#if 0
+    retcode |= GenerateDatabaseFile(object_entry, objectName, dbPath);
+    if( RTN_OK != retcode )
     {
-        currentLineNum++;
-        firstNonEmptyChar = line.find_first_not_of(' ');
-        firstChar = line.at(firstNonEmptyChar);
-
-        if( isComment(firstChar) )
-        {
-            continue;
-        }
-
-        std::istringstream lineStream(line);
-
-        if( isEndOfObject(firstChar) )
-        {
-            WriteObjectEnd(headerFile);
-            parsingObjectEntry = false;
-            continue;
-        }
-
-        if( !parsingObjectEntry )
-        {
-            retcode |= ParseObjectEntry(lineStream, object_entry);
-            if( RTN_OK != retcode )
-            {
-                LOG_WARN("Error reading object entry: %s%s.skm:%d", skmPath.c_str(), objectName.c_str(), currentLineNum);
-                return retcode;
-            }
-
-            retcode |= GenerateObjectHeader(object_entry, headerFile);
-            parsingObjectEntry = true;
-            continue;
-        }
-        else
-        {
-            FIELD_SCHEMA field_entry;
-            retcode |= ParseFieldEntry(lineStream, field_entry);
-
-            if( RTN_OK != retcode )
-            {
-                LOG_WARN("Error reading field entry: %s%s.skm:%d", skmPath.c_str(), objectName.c_str(), currentLineNum);
-                return retcode;
-            }
-            retcode |= GenerateFieldHeader(field_entry, headerFile);
-            object_entry.objectSize += field_entry.fieldSize;
-            continue;
-        }
+        LOG_WARN("Error generating %s.db", object_entry.objectName.c_str());
+        return retcode;
     }
-
-    headerFile << "\n\n#endif";
-
-    if( schemaFile.bad() )
-    {
-        LOG_WARN("Error reading %s%s.skm", skmPath.c_str(), objectName.c_str());
-        retcode |= RTN_FAIL;
-    }
-
-    if( headerFile.bad() )
-    {
-        LOG_WARN("Error writing %s%s.hh", incPath.c_str(), objectName.c_str());
-        retcode |= RTN_FAIL;
-    }
-
-    schemaFile.close();
-    headerFile.close();
-
-    LOG_INFO("Genrated %s.hh", object_entry.objectName.c_str());
+    LOG_INFO("Generated %s.db", object_entry.objectName.c_str());
+#endif
 
     retcode |= AddToAllDBHeader(object_entry);
-
-    //retcode |= GenerateDatabaseFile(object_entry, objectName);
-    if( RTN_OK == retcode )
+    if( RTN_OK != retcode )
     {
-            LOG_INFO("Generated %s.db", object_entry.objectName.c_str());
+        LOG_WARN("Error adding %s to allHeader.hh", object_entry.objectName.c_str());
+        return retcode;
     }
+    LOG_INFO("Added to %s to allHeader.hh", object_entry.objectName.c_str());
 
     return retcode;
 }

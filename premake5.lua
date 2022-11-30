@@ -129,7 +129,13 @@ project "Schema"
 
     defines
     {
+        "__ENABLE_LOGGING",
+        "__LOG_SHOW_LINE"
+    }
 
+    postbuildcommands
+    {
+        "Schema --object BASS"
     }
 
 project "DBMapper"
@@ -166,6 +172,11 @@ project "DBMapper"
     defines
     {
 
+    }
+
+    dependson
+    {
+        "Schema"
     }
 
 project "Talker"
@@ -273,12 +284,49 @@ project "Profiler"
         "__ENABLE_PROFILING"
     }
 
+
+project "InstantiateDB"
+    location "InstantiateDB"
+    kind "ConsoleApp"
+    language "C++"
+    cppdialect "C++17"
+    systemversion "latest" -- compiler version
+
+    targetdir(targetbuilddir)
+    objdir(intermediatedir)
+    libdirs(sharedbuildlibs)
+
+    files
+    {
+        projectsrc,
+        projectinc
+    }
+
+    includedirs
+    {
+        commoninc,
+        projincpath,
+        dbincdir
+    }
+
+    links
+    {
+        "Logger"
+    }
+
+    defines
+    {
+        "__ENABLE_LOGGING",
+        "__LOG_SHOW_LINE"
+    }
+
+
 filter "configurations:Debug"
-    defines "_ENABLE_LOGGING"
+    defines "__ENABLE_LOGGING"
     symbols "On"
 
 filter "configurations:Release"
-    defines "_ENABLE_LOGGING"
+    defines "__ENABLE_LOGGING"
     optimize "Speed"
 
 filter "configurations:Performance"

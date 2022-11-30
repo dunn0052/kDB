@@ -12,7 +12,8 @@
 #include <allDBs.hh>
 
 
-Database::Database()
+Database::Database(const std::string& file_path = "")
+    : m_DBFilePath(file_path)
 {
 
 }
@@ -22,12 +23,12 @@ Database::~Database()
 
 }
 
-inline int OpenDatabase(const OBJECT& objectName)
+int Database::OpenDatabase(const OBJECT& objectName)
 {
-   std::stringstream filepath;
+    std::stringstream filepath;
     // Get relative path
-    filepath << "./db/db/" << objectName << ".db";
-    const std::string path = filepath.str();
+    filepath << m_DBFilePath << objectName << DB_EXT;
+    const std::string& path = filepath.str();
     int fd = open(path.c_str(), O_RDWR);
     return fd;
 }
@@ -81,7 +82,7 @@ RETCODE Database::Open(const OBJECT& objectName)
     if(RTN_OK == retcode )
     {
         MappedMemory mem = {.p_mapped = p_object, .size = statbuf.st_size};
-        m_ObjectMemMap[objectName] = mem;
+        m_ObjectMemMap[std::string(objectName)] = mem;
     }
 
     return retcode;
@@ -92,7 +93,7 @@ RETCODE Database::Close(const OBJECT& objectName)
 {
     int error = 0;
 
-    auto mapIterator = m_ObjectMemMap.find(objectName);
+    auto mapIterator = m_ObjectMemMap.find(std::string(objectName));
 
     if ( mapIterator != m_ObjectMemMap.end() )
     {
@@ -112,7 +113,7 @@ RETCODE Database::Close(const OBJECT& objectName)
 
 char* Database::GetObjectMem(const OBJECT& objectName)
 {
-    auto mapIterator = m_ObjectMemMap.find(objectName);
+    auto mapIterator = m_ObjectMemMap.find(std::string(objectName));
 
     if( mapIterator != m_ObjectMemMap.end() )
     {

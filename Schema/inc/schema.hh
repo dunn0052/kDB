@@ -32,11 +32,22 @@ struct OBJECT_SCHEMA
     size_t objectSize;
 };
 
-inline std::istream& operator >> (std::istream& input_stream, OBJECT_SCHEMA& object_entry)
+inline std::istream& operator >> (std::istream& input_stream,
+    OBJECT_SCHEMA& object_entry)
 {
-    return input_stream >> object_entry.objectNumber >> object_entry.objectName >> object_entry.numberOfRecords;
+    return input_stream
+        >> object_entry.objectNumber
+        >> object_entry.objectName
+        >> object_entry.numberOfRecords;
 }
 
-RETCODE GenerateObjectDBFiles(const OBJECT& objectName);
+
+
+RETCODE GenerateObjectDBFiles(const OBJECT& objectName,
+    const std::string& skm_path,
+    const std::string& inc_path);
+
+RETCODE GenerateAllDBFiles(const std::string& skm_path,
+    const std::string& inc_path);
 
 #endif
