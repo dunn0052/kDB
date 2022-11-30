@@ -14,8 +14,13 @@ class CLI_ObjectArgs : public CLI::CLI_Argument<OBJECT, 1, 1>
 
         bool TryConversion(const std::string& conversion, OBJECT& value)
         {
-            value = conversion;
-            return true;
+            if(OBJECT_NAME_LEN <= conversion.length())
+            {
+                memcpy(value, conversion.c_str(), sizeof(value));
+                return true;
+            }
+
+            return false;
         }
 };
 

@@ -60,7 +60,7 @@ namespace Log
         }
 
         std::cout << TEXT_COLOR << "[" << debugLevel << "]";
- #ifdef _LOG_SHOW_LINE
+ #ifdef __LOG_SHOW_LINE
                 std::cout << "[" << fileName << ":" << lineNum << "]";
  #endif
         std::cout << " ";
