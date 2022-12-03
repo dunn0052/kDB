@@ -48,11 +48,11 @@ int main(int argc, char* argv[])
     if( databaseArgs.IsInUse() )
     {
         const OBJECT& objectName = databaseArgs.GetValue();
-
+        #if 0
         retcode |= GenerateObjectDBFiles(objectName,
             db_schema_path,
             db_header_path);
-
+        #endif
         if(!IS_RETCODE_OK(retcode))
         {
             LOG_WARN("Failed generating files for %s", objectName);
