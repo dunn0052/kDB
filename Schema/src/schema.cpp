@@ -4,6 +4,7 @@
 #include <compiler_defines.hh>
 #include <Constants.hh>
 #include <dirent.h>
+#include <bits/stdc++.h>
 
 /* Object info */
 RETCODE ParseObjectEntry(std::istringstream& line, OBJECT_SCHEMA& out_object)
@@ -45,14 +46,17 @@ inline bool isEndOfObject(char firstChar)
 
 static RETCODE GenerateObjectHeader(OBJECT_SCHEMA& object, std::ofstream& headerFile)
 {
+    headerFile << "// GENERATED: DO NOT MODIFY!!\n";
     /* Header guard */
     headerFile << "#ifndef " << std::uppercase << object.objectName << "__HH";
     headerFile << "\n#define " << std::uppercase << object.objectName << "__HH";
     headerFile << "\n\n#include <DOFRI.hh>\n"; // maybe..
 
-    headerFile << "\n\nstatic const size_t O_" << std::uppercase << object.objectName << "_NUM_RECORDS = " << object.numberOfRecords << ";";
-    headerFile << "\n\n#pragma pack (4)";
-    headerFile << "\nstruct " << std::uppercase << object.objectName << "\n{";
+    headerFile
+        << "\nstruct "
+        << std::uppercase
+        << object.objectName
+        << "\n{";
 
     if( headerFile.bad() )
     {
@@ -231,9 +235,57 @@ static RETCODE GenerateFieldHeader(FIELD_SCHEMA& field, std::ofstream& headerFil
     return RTN_OK;
 }
 
-RETCODE WriteObjectEnd( std::ofstream& headerFile )
+RETCODE WriteObjectEnd( std::ofstream& headerFile, OBJECT_SCHEMA object )
 {
-    headerFile << "\n};\n\n#endif";
+    headerFile << "\n};";
+    std::stringstream upperCaseSStream;
+    upperCaseSStream << std::uppercase << std::string(object.objectName);
+    const std::string& objName = upperCaseSStream.str();
+
+    /* Number of records */
+    headerFile << "\nstatic const size_t O_"
+        << objName
+        << "_NUM_RECORDS = "
+        << object.numberOfRecords
+        << ";\n";
+
+    /* Object number */
+    headerFile
+        << "static const size_t O_"
+        << objName
+        << "_OBJECT_NUMBER = "
+        << object.objectNumber
+        << ";\n";
+
+    /* Object name */
+    headerFile
+        << "\nstatic const OBJECT O_"
+        << objName
+        << "_NAME = \""
+        << objName
+        << "\";";
+
+    /* Object size */
+    headerFile
+        << "\nstatic const size_t O_"
+        << objName
+        << "_SIZE = sizeof("
+        << objName
+        << ");\n";
+
+    /* DB size */
+    headerFile
+        << "static const size_t O_"
+        << objName
+        << "_DB_SIZE = O_"
+        << objName
+        <<  "_SIZE * "
+        << "O_"
+        << objName
+        << "_NUM_RECORDS;";
+
+    headerFile << "\n\n#endif";
+
     if( headerFile.bad() )
     {
         return RTN_FAIL;
@@ -363,6 +415,63 @@ static RETCODE AddToAllDBHeader(OBJECT_SCHEMA& object_entry)
     return RTN_OK;
 }
 
+static RETCODE OpenDBMapFile(std::ofstream& headerStream)
+{
+    std::stringstream dbMapHeaderPath;
+    dbMapHeaderPath
+        << INSTALL_DIR
+        << COMMON_INC_PATH
+        << DB_MAP_HEADER_NAME
+        << HEADER_EXT;
+
+    headerStream.open(dbMapHeaderPath.str(),
+        std::fstream::in | std::fstream::out | std::fstream::trunc);
+
+    if( !headerStream.is_open() )
+    {
+        LOG_WARN("Could not open up %s for writing", dbMapHeaderPath.str().c_str());
+        return RTN_NOT_FOUND;
+    }
+
+    return RTN_OK;
+}
+
+static RETCODE WriteDBMapHeader(std::ofstream& headerStream)
+{
+    headerStream << "//GENERATED FILE! DO NOT MODIFY\n";
+
+    headerStream <<
+        "#include <string>\n#include <map>\n\n#include <allDBs.hh>\n";
+
+    headerStream <<
+        "\nstatic std::map<std::string, size_t> dbSizes =\n\t{";
+
+    return RTN_OK;
+
+}
+
+static RETCODE WriteDBMapObject(std::ofstream& headerStream, const OBJECT_SCHEMA& object_entry)
+{
+    std::stringstream upperCaseSStream;
+    upperCaseSStream << std::uppercase << std::string(object_entry.objectName);
+    const std::string& objName = upperCaseSStream.str();
+    headerStream
+        << "\n\t\t{"
+        << "O_"
+        << objName
+        << "_NAME, O_"
+        << objName
+        << "_DB_SIZE},";
+
+    return RTN_OK;
+}
+
+static RETCODE WriteDBMapFooter(std::ofstream& headerStream)
+{
+    headerStream << "\n\t};";
+    return RTN_OK;
+}
+
 static RETCODE GenerateObject(const OBJECT& objectName, const std::string& skmPath, OBJECT_SCHEMA& out_object_entry)
 {
     RETCODE retcode = RTN_OK;
@@ -476,7 +585,7 @@ static RETCODE GenerateHeaderFile(OBJECT_SCHEMA& object_entry, const std::string
         retcode |= GenerateFieldHeader(field, headerFile);
     }
 
-    retcode |= WriteObjectEnd(headerFile);
+    retcode |= WriteObjectEnd(headerFile, object_entry);
 
     headerFile.close();
 
@@ -499,7 +608,10 @@ static RETCODE GenerateHeaderFile(OBJECT_SCHEMA& object_entry, const std::string
  *
 */
 
-RETCODE GenerateObjectDBFiles(const OBJECT& objectName, const std::string& skmPath, const std::string& incPath)
+RETCODE GenerateObjectDBFiles(const OBJECT& objectName,
+    const std::string& skmPath,
+    const std::string& incPath,
+    std::ofstream& dbMapStream)
 {
     OBJECT_SCHEMA object_entry;
     RETCODE retcode = GenerateObject(objectName, skmPath, object_entry);
@@ -538,6 +650,14 @@ RETCODE GenerateObjectDBFiles(const OBJECT& objectName, const std::string& skmPa
     }
     LOG_INFO("Added to %s to allHeader.hh", object_entry.objectName.c_str());
 
+    retcode |= WriteDBMapObject(dbMapStream, object_entry);
+    if( RTN_OK != retcode )
+    {
+        LOG_WARN("Error adding %s to DBMap.hh",
+            object_entry.objectName.c_str());
+        return retcode;
+    }
+
     return retcode;
 }
 
@@ -570,8 +690,6 @@ RETCODE GetSchemaFileObjectName(const std::string& skmFileName, std::string& out
 
 RETCODE GenerateAllDBFiles(const std::string& skmPath, const std::string& incPath)
 {
-    LOG_DEBUG("Schema path: %s", skmPath.c_str());
-    LOG_DEBUG("Include path: %s", incPath.c_str());
     RETCODE retcode = RTN_OK;
     std::vector<std::string> schema_files;
     DIR *directory;
@@ -606,12 +724,35 @@ RETCODE GenerateAllDBFiles(const std::string& skmPath, const std::string& incPat
 
         closedir (directory);
 
+        std::ofstream dbMapStream;
+        retcode |= OpenDBMapFile(dbMapStream);
+        if( RTN_OK != retcode )
+        {
+            LOG_WARN("Error opening DBMap.hh");
+            return retcode;
+        }
+
+        retcode |= WriteDBMapHeader(dbMapStream);
+        if( RTN_OK != retcode )
+        {
+            LOG_WARN("Error writing DBMap.hh header");
+            return retcode;
+        }
+
         for(std::string& schema : schema_files)
         {
             OBJECT objName = {0};
             strncpy(objName, schema.c_str(), sizeof(objName));
-            retcode |= GenerateObjectDBFiles(objName, skmPath, incPath);
+            retcode |= GenerateObjectDBFiles(objName, skmPath, incPath, dbMapStream);
         }
+
+        retcode |= WriteDBMapFooter(dbMapStream);
+        if( RTN_OK != retcode )
+        {
+            LOG_WARN("Error writing DBMap.hh header");
+            return retcode;
+        }
+        LOG_INFO("Generated DBMap.hh");
 
         return retcode;
     }

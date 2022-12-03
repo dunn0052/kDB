@@ -320,6 +320,10 @@ project "InstantiateDB"
         "__LOG_SHOW_LINE"
     }
 
+    dependson
+    {
+        "Schema"
+    }
 
 filter "configurations:Debug"
     defines "__ENABLE_LOGGING"
