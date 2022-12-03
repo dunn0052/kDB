@@ -3,7 +3,7 @@
 #include <unistd.h>
 #include <compiler_defines.hh>
 #include <Constants.hh>
-
+#include <dirent.h>
 
 /* Object info */
 RETCODE ParseObjectEntry(std::istringstream& line, OBJECT_SCHEMA& out_object)
@@ -246,7 +246,7 @@ static RETCODE GenerateDatabaseFile(OBJECT_SCHEMA& object_entry, const std::stri
 {
     RETCODE retcode = RTN_OK;
     std::stringstream filepath;
-    filepath << INSTALL_DIR << dbPath <<  object_entry.objectName << DB_EXT;
+    filepath << dbPath <<  object_entry.objectName << DB_EXT;
     const std::string path = filepath.str();
     size_t fileSize = object_entry.objectSize * object_entry.numberOfRecords;
 
@@ -374,7 +374,7 @@ static RETCODE GenerateObject(const OBJECT& objectName, const std::string& skmPa
     std::ifstream schemaFile;
     std::stringstream schema_path;
 
-    schema_path << INSTALL_DIR << skmPath << objectName << SKM_EXT;
+    schema_path << skmPath << objectName << SKM_EXT;
 
 
     schemaFile.open(schema_path.str());
@@ -508,7 +508,7 @@ RETCODE GenerateObjectDBFiles(const OBJECT& objectName, const std::string& skmPa
     }
 
     std::stringstream header_path;
-    header_path << INSTALL_DIR << incPath << objectName << HEADER_EXT;
+    header_path << incPath << objectName << HEADER_EXT;
     retcode |= GenerateHeaderFile(object_entry, header_path.str());
     if( RTN_OK != retcode )
     {
@@ -536,4 +536,85 @@ RETCODE GenerateObjectDBFiles(const OBJECT& objectName, const std::string& skmPa
     LOG_INFO("Added to %s to allHeader.hh", object_entry.objectName.c_str());
 
     return retcode;
+}
+
+RETCODE GetSchemaFileObjectName(const std::string& skmFileName, std::string& out_ObjectName)
+{
+    if("." == skmFileName || ".." == skmFileName)
+    {
+        out_ObjectName = skmFileName;
+        // current and up directory can be skipped
+        return RTN_OK;
+    }
+
+    size_t ext_index = skmFileName.rfind('.', skmFileName.length());
+    if (ext_index != std::string::npos)
+    {
+        std::string ext_name =
+            skmFileName.substr(ext_index, skmFileName.length() - ext_index);
+
+        if(SKM_EXT == ext_name)
+        {
+            out_ObjectName = skmFileName.substr(0, ext_index);
+            return RTN_OK;
+        }
+
+
+    }
+
+    return RTN_NOT_FOUND;
+}
+
+RETCODE GenerateAllDBFiles(const std::string& skmPath, const std::string& incPath)
+{
+    LOG_DEBUG("Schema path: %s", skmPath.c_str());
+    LOG_DEBUG("Include path: %s", incPath.c_str());
+    RETCODE retcode = RTN_OK;
+    std::vector<std::string> schema_files;
+    DIR *directory;
+    struct dirent *fileName;
+    if ((directory = opendir (skmPath.c_str())) != NULL)
+    {
+        /* print all the files and directories within directory */
+        while ((fileName = readdir (directory)) != NULL)
+        {
+            std::string objectName;
+            std::string foundFile = std::string(fileName->d_name);
+            retcode |= GetSchemaFileObjectName(
+                foundFile, objectName);
+
+            if("." == foundFile || ".." == foundFile)
+            {
+                // current and up directory can be skipped
+                continue;
+            }
+
+            if(RTN_OK == retcode)
+            {
+                LOG_DEBUG("Found schema file: %s", foundFile.c_str());
+                schema_files.push_back(objectName);
+            }
+            else
+            {
+                LOG_WARN("File: %s does not have a %s extension",
+                    foundFile.c_str(),  SKM_EXT.c_str());
+            }
+        }
+
+        closedir (directory);
+
+        for(std::string& schema : schema_files)
+        {
+            OBJECT objName = {0};
+            strncpy(objName, schema.c_str(), sizeof(objName));
+            retcode |= GenerateObjectDBFiles(objName, skmPath, incPath);
+        }
+
+        return retcode;
+    }
+    else
+    {
+        /* could not open directory */
+        return RTN_NOT_FOUND;
+    }
 }

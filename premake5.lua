@@ -135,7 +135,7 @@ project "Schema"
 
     postbuildcommands
     {
-        "Schema --object BASS"
+        "Schema -a"
     }
 
 project "DBMapper"

@@ -20,7 +20,7 @@ class CLI_DatabaseArgs : public CLI::CLI_Argument<OBJECT, 1, 1>
 
 int main(int argc, char* argv[])
 {
-    CLI_DatabaseArgs databaseArgs("--object", "Name of database object", true);
+    CLI_DatabaseArgs databaseArgs("--object", "Name of database object");
     CLI::CLI_StringArgument inc_path("-h", "Path to write object header file");
     CLI::CLI_StringArgument skm_path("-s", "Path to write object schema file");
     CLI::CLI_FlagArgument all_arg("-a", "Build all schema");
@@ -33,17 +33,17 @@ int main(int argc, char* argv[])
 
     RETCODE retcode = parser.ParseCommandLineArguments(argc, argv);
 
+    const std::string db_schema_path = skm_path.IsInUse() ?
+        skm_path.GetValue() : INSTALL_DIR + DB_SKM_DIR;
+
+    const std::string db_header_path = inc_path.IsInUse() ?
+        inc_path.GetValue() : INSTALL_DIR + DB_INC_DIR;
+
     if( databaseArgs.IsInUse() )
     {
-        const std::string db_schema_path = skm_path.IsInUse() ?
-            skm_path.GetValue() : DB_SKM_DIR;
-
-        const std::string db_header_path = inc_path.IsInUse() ?
-            inc_path.GetValue() : DB_INC_DIR;
-
         const OBJECT& objectName = databaseArgs.GetValue();
 
-        RETCODE retcode = GenerateObjectDBFiles(objectName,
+        retcode |= GenerateObjectDBFiles(objectName,
             db_schema_path,
             db_header_path);
 
@@ -52,6 +52,16 @@ int main(int argc, char* argv[])
             LOG_WARN("Failed generating files for %s", objectName);
         }
     }
+    else if(all_arg.IsInUse())
+    {
+        retcode |= GenerateAllDBFiles(
+            db_schema_path, db_header_path);
 
-    return RTN_OK;
+        if(!IS_RETCODE_OK(retcode))
+        {
+            LOG_WARN("Failed generating files!");
+        }
+    }
+
+    return retcode;
 }
