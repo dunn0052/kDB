@@ -56,6 +56,7 @@ CMakeFiles/
 db/inc/*
 db/db/*
 *.db
+common_inc/allDBs.hh
 
 #profiler
 *.json

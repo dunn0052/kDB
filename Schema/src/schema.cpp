@@ -279,11 +279,19 @@ static RETCODE readAllDBHeader(OBJECT_SCHEMA& object_entry, std::vector<std::str
     size_t lineNum = 1;
     std::ifstream headerStream;
     std::stringstream allDBHeaderPath;
-    allDBHeaderPath << INSTALL_DIR << COMMON_INC_PATH << ALL_DB_HEADER_NAME << HEADER_EXT;
-    headerStream.open(allDBHeaderPath.str());
+    allDBHeaderPath
+        << INSTALL_DIR
+        << COMMON_INC_PATH
+        << ALL_DB_HEADER_NAME
+        << HEADER_EXT;
+
+    headerStream.open(allDBHeaderPath.str(),
+        std::fstream::in | std::fstream::out | std::fstream::app);
 
     if( !headerStream.is_open() )
     {
+        LOG_WARN("Could not open up %s for reading!",
+            allDBHeaderPath.str().c_str());
         return RTN_NOT_FOUND;
     }
 
@@ -318,12 +326,18 @@ static RETCODE readAllDBHeader(OBJECT_SCHEMA& object_entry, std::vector<std::str
 static RETCODE writeAllDBHeader(std::vector<std::string>& out_lines)
 {
     std::stringstream allDBHeaderPath;
-    allDBHeaderPath << INSTALL_DIR << COMMON_INC_PATH << ALL_DB_HEADER_NAME << HEADER_EXT;
+    allDBHeaderPath
+        << INSTALL_DIR
+        << COMMON_INC_PATH
+        << ALL_DB_HEADER_NAME
+        << HEADER_EXT;
+
     std::ofstream headerStream;
     headerStream.open(allDBHeaderPath.str());
 
     if( !headerStream.is_open() )
     {
+        LOG_WARN("Could not open up %s for writing", allDBHeaderPath.str().c_str());
         return RTN_NOT_FOUND;
     }
 
@@ -341,25 +355,12 @@ static RETCODE writeAllDBHeader(std::vector<std::string>& out_lines)
 static RETCODE AddToAllDBHeader(OBJECT_SCHEMA& object_entry)
 {
     std::vector<std::string> out_lines;
-    RETCODE retcode = RTN_OK;
 
-    retcode = readAllDBHeader(object_entry, out_lines);
-    std::stringstream allDBHeaderPath;
-    allDBHeaderPath << INSTALL_DIR << COMMON_INC_PATH << ALL_DB_HEADER_NAME << HEADER_EXT;
-    if(RTN_OK != retcode)
-    {
-        LOG_WARN("Could not open up %sfor reading!", allDBHeaderPath.str().c_str());
-        return retcode;
-    }
+    RETURN_RETCODE_IF_NOT_OK(readAllDBHeader(object_entry, out_lines));
 
-    retcode = writeAllDBHeader(out_lines);
-    if(RTN_OK != retcode)
-    {
-        LOG_WARN("Could not open up %s for writing", allDBHeaderPath.str().c_str());
-        return retcode;
-    }
+    RETURN_RETCODE_IF_NOT_OK(writeAllDBHeader(out_lines));
 
-    return retcode;
+    return RTN_OK;
 }
 
 static RETCODE GenerateObject(const OBJECT& objectName, const std::string& skmPath, OBJECT_SCHEMA& out_object_entry)
@@ -387,8 +388,6 @@ static RETCODE GenerateObject(const OBJECT& objectName, const std::string& skmPa
         return RTN_NOT_FOUND;
     }
 
-
-
     while( std::getline(schemaFile, line) )
     {
         currentLineNum++;
@@ -414,7 +413,8 @@ static RETCODE GenerateObject(const OBJECT& objectName, const std::string& skmPa
             retcode |= ParseObjectEntry(lineStream, out_object_entry);
             if( RTN_OK != retcode )
             {
-                LOG_WARN("Error reading object entry: %s%s.skm:%d", skmPath.c_str(), objectName, currentLineNum);
+                LOG_WARN("Error reading object entry: %s%s.skm:%d",
+                    skmPath.c_str(), objectName, currentLineNum);
                 return retcode;
             }
 
@@ -428,13 +428,15 @@ static RETCODE GenerateObject(const OBJECT& objectName, const std::string& skmPa
 
             if( RTN_OK != retcode )
             {
-                LOG_WARN("Error reading field entry: %s%s.skm:%d", skmPath.c_str(), objectName, currentLineNum);
+                LOG_WARN("Error reading field entry: %s%s.skm:%d",
+                    skmPath.c_str(), objectName, currentLineNum);
                 return retcode;
             }
 
             if(!TrySetFieldSize(field_entry))
             {
-                LOG_WARN("Invalid field entry: %s%s.skm:%d", skmPath.c_str(), objectName, currentLineNum);
+                LOG_WARN("Invalid field entry: %s%s.skm:%d",
+                    skmPath.c_str(), objectName, currentLineNum);
                 retcode |= RTN_NOT_FOUND;
                 return retcode;
             }
@@ -530,7 +532,8 @@ RETCODE GenerateObjectDBFiles(const OBJECT& objectName, const std::string& skmPa
     retcode |= AddToAllDBHeader(object_entry);
     if( RTN_OK != retcode )
     {
-        LOG_WARN("Error adding %s to allHeader.hh", object_entry.objectName.c_str());
+        LOG_WARN("Error adding %s to allHeader.hh",
+            object_entry.objectName.c_str());
         return retcode;
     }
     LOG_INFO("Added to %s to allHeader.hh", object_entry.objectName.c_str());
@@ -547,15 +550,15 @@ RETCODE GetSchemaFileObjectName(const std::string& skmFileName, std::string& out
         return RTN_OK;
     }
 
-    size_t ext_index = skmFileName.rfind('.', skmFileName.length());
-    if (ext_index != std::string::npos)
+    size_t extension_index = skmFileName.rfind('.', skmFileName.length());
+    if (extension_index != std::string::npos)
     {
-        std::string ext_name =
-            skmFileName.substr(ext_index, skmFileName.length() - ext_index);
+        std::string ext_name = skmFileName.substr(extension_index,
+            skmFileName.length() - extension_index);
 
         if(SKM_EXT == ext_name)
         {
-            out_ObjectName = skmFileName.substr(0, ext_index);
+            out_ObjectName = skmFileName.substr(0, extension_index);
             return RTN_OK;
         }
 
