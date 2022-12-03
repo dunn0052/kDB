@@ -18,6 +18,12 @@ class CLI_DatabaseArgs : public CLI::CLI_Argument<OBJECT, 1, 1>
         }
 };
 
+static std::string currentDirectory(char* argv[])
+{
+    std::string path = std::string(argv[0]);
+    return path.substr(0, path.find_last_of("\\/"));
+}
+
 int main(int argc, char* argv[])
 {
     CLI_DatabaseArgs databaseArgs("--object", "Name of database object");
