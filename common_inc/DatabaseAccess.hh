@@ -65,36 +65,56 @@ class DatabaseAccess
 
         RETCODE WriteValue(const DOFRI& dofri, const std::string& value)
         {
+            RETCODE retcode = RTN_OK;
             void* p_value = Get(dofri);
             if(nullptr == p_value)
             {
                 return RTN_NULL_OBJ;
             }
 
-            switch(m_Object.fields[dofri.i].fieldType)
+            switch(m_Object.fields[dofri.f].fieldType)
             {
                 case 'D': // Databse innacurate because its a string alias
                 {
+                    if(value.size() > m_Object.fields[dofri.f].numElements)
+                    {
+                        return RTN_BAD_ARG;
+                    }
+
                     strncpy(static_cast<char*>(p_value),
-                        value.c_str(), sizeof(DATABASE));
+                        value.c_str(), value.size());
                     break;
                 }
                 case 'O': // Object
                 {
+                    if(value.size() > m_Object.fields[dofri.f].numElements)
+                    {
+                        return RTN_BAD_ARG;
+                    }
+
                     strncpy(static_cast<char*>(p_value),
-                        value.c_str(), sizeof(OBJECT));
+                        value.c_str(), value.size());
                     break;
                 }
                 case 'C': // Char
                 case 'Y': // Unsigned char (byte)
                 {
-                    memcpy(p_value, value.c_str(),
-                        std::min(m_Object.fields[dofri.f].numElements,
-                            value.size()));
+                    if(value.size() > m_Object.fields[dofri.f].numElements)
+                    {
+                        return RTN_BAD_ARG;
+                    }
+
+                    memcpy(p_value, value.c_str(), value.size());
                     break;
                 }
                 case 'N': // signed integer
                 {
+                    int int_val = atol(value.c_str());
+                    if(0 == int_val and "0" != value.c_str())
+                    {
+                        return RTN_BAD_ARG;
+                    }
+
                     *static_cast<int*>(p_value) = atol(value.c_str());
                     break;
                 }
@@ -103,8 +123,12 @@ class DatabaseAccess
                 case 'I': // Index
                 case 'U': // Unsigned integer
                 {
-                    *static_cast<size_t*>(p_value) =
-                        static_cast<size_t>(atol(value.c_str()));
+                    size_t int_val = static_cast<size_t>(atol(value.c_str()));
+                    if(0 == int_val and "0" != value.c_str())
+                    {
+                        retcode |= RTN_BAD_ARG;
+                    }
+                    *static_cast<size_t*>(p_value) = int_val;
                     break;
                 }
                 case 'B': // Bool
@@ -128,6 +152,64 @@ class DatabaseAccess
 
             return RTN_OK;
         }
+
+        RETCODE ReadValue(const DOFRI& dofri, std::string& value)
+        {
+            void* p_value = Get(dofri);
+            if(nullptr == p_value)
+            {
+                return RTN_NULL_OBJ;
+            }
+
+            std::stringstream db_value;
+
+            switch(m_Object.fields[dofri.f].fieldType)
+            {
+                case 'D': // Databse innacurate because its a string alias
+                {
+                    db_value << *static_cast<DATABASE*>(p_value);
+                    break;
+                }
+                case 'O': // Object
+                {
+                    db_value << *static_cast<OBJECT*>(p_value);
+                    break;
+                }
+                case 'C': // Char
+                case 'Y': // Unsigned char (byte)
+                {
+                    db_value.rdbuf()->sputn(reinterpret_cast<char*>(p_value),
+                        sizeof(char) * m_Object.fields[dofri.f].numElements);
+                    break;
+                }
+                case 'N': // signed integer
+                {
+                    db_value << *static_cast<int*>(p_value);
+                    break;
+                }
+                case 'F': // Field
+                case 'R': // Record
+                case 'I': // Index
+                case 'U': // Unsigned integer
+                {
+                    db_value << *static_cast<size_t*>(p_value);
+                    break;
+                }
+                case 'B': // Bool
+                {
+                    db_value << *static_cast<bool*>(p_value);
+                    break;
+                }
+                default:
+                {
+                    return RTN_BAD_ARG;
+                }
+            }
+
+            value = db_value.str();
+            return RTN_OK;
+        }
+
     private:
 
         char* MapObject(int fd, off_t size)
