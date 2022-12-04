@@ -11,6 +11,12 @@ static RETCODE UpdateDBValue(DOFRI& dofri, const std::string& value)
     return db_object.WriteValue(dofri, value);
 }
 
+static RETCODE ReadDBValue(DOFRI& dofri, std::string& value)
+{
+    DatabaseAccess db_object = DatabaseAccess(dofri.o);
+    return db_object.ReadValue(dofri, value);
+}
+
 int main(int argc, char* argv[])
 {
     CLI::Parser parse("DBSet", "Update value in object");
@@ -18,7 +24,7 @@ int main(int argc, char* argv[])
     CLI::CLI_IntArgument fieldArg("-f", "Field number in object", true);
     CLI::CLI_IntArgument recordArg("-r", "Record number", true);
     CLI::CLI_IntArgument indexArg("-i", "Index of field");
-    CLI::CLI_StringArgument valueArg("-v", "Value update", true);
+    CLI::CLI_StringArgument valueArg("-v", "Value update");
 
     parse
         .AddArg(objectArg)
@@ -43,16 +49,34 @@ int main(int argc, char* argv[])
             dofri.i = 0;
         }
 
-        retcode |= UpdateDBValue(dofri, valueArg.GetValue());
-        if(IS_RETCODE_OK(retcode))
+        if(valueArg.IsInUse())
         {
-            LOG_INFO("Updated %s.%u.%u.%u = %s",
-                dofri.o, dofri.f, dofri.r, dofri.i, valueArg.GetValue().c_str());
+            retcode |= UpdateDBValue(dofri, valueArg.GetValue());
+            if(IS_RETCODE_OK(retcode))
+            {
+                LOG_INFO("Updated %s.%u.%u.%u = %s",
+                    dofri.o, dofri.f, dofri.r, dofri.i, valueArg.GetValue().c_str());
+            }
+            else
+            {
+                LOG_WARN("Failed to update %s.%u.%u.%u with %s",
+                    dofri.o, dofri.f, dofri.r, dofri.i, valueArg.GetValue().c_str());
+            }
         }
         else
         {
-            LOG_WARN("Failed to update %s.%u.%u.%u with %s",
-                dofri.o, dofri.f, dofri.r, dofri.i, valueArg.GetValue().c_str());
+            std::string value;
+            retcode |= ReadDBValue(dofri, value);
+            if(IS_RETCODE_OK(retcode))
+            {
+                LOG_INFO("Value of %s.%u.%u.%u = %s",
+                    dofri.o, dofri.f, dofri.r, dofri.i, value.c_str());
+            }
+            else
+            {
+                LOG_WARN("Failed to read %s.%u.%u.%u",
+                    dofri.o, dofri.f, dofri.r, dofri.i);
+            }
         }
     }
 
