@@ -325,6 +325,47 @@ project "InstantiateDB"
         "Schema"
     }
 
+project "DBSet"
+    location "DBSet"
+    kind "ConsoleApp"
+    language "C++"
+    cppdialect "C++17"
+    systemversion "latest" -- compiler version
+
+    targetdir(targetbuilddir)
+    objdir(intermediatedir)
+    libdirs(sharedbuildlibs)
+
+    files
+    {
+        projectsrc,
+        projectinc
+    }
+
+    includedirs
+    {
+        commoninc,
+        projincpath,
+        dbincdir
+    }
+
+    links
+    {
+        "Logger"
+    }
+
+    defines
+    {
+        "__ENABLE_LOGGING",
+        "__LOG_SHOW_LINE"
+    }
+
+    dependson
+    {
+        "Schema",
+        "InstantiateDB"
+    }
+
 filter "configurations:Debug"
     defines "__ENABLE_LOGGING"
     symbols "On"

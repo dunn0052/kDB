@@ -50,7 +50,7 @@ static RETCODE GenerateObjectHeader(OBJECT_SCHEMA& object, std::ofstream& header
     /* Header guard */
     headerFile << "#ifndef " << std::uppercase << object.objectName << "__HH";
     headerFile << "\n#define " << std::uppercase << object.objectName << "__HH";
-    headerFile << "\n\n#include <DOFRI.hh>\n"; // maybe..
+    headerFile << "\n\n#include <DOFRI.hh>\n#include<ObjectSchema.hh>\n"; // maybe..
 
     headerFile
         << "\nstruct "
@@ -235,27 +235,44 @@ static RETCODE GenerateFieldHeader(FIELD_SCHEMA& field, std::ofstream& headerFil
     return RTN_OK;
 }
 
-RETCODE WriteObjectEnd( std::ofstream& headerFile, OBJECT_SCHEMA object )
+RETCODE GenerateObjectInfo(std::ofstream& headerFile, OBJECT_SCHEMA& object)
+{
+    headerFile << "\nstatic const OBJECT_SCHEMA O_" << std::uppercase << object.objectName << "_INFO =\n"
+        << "    {\n"
+        << "        .objectNumber = " << object.objectNumber << ",\n"
+        << "        .objectName = \"" << std::uppercase << object.objectName << "\",\n"
+        << "        .numberOfRecords = " << object.numberOfRecords << ",\n"
+        << "        .fields =\n        {";
+
+    for(FIELD_SCHEMA& field : object.fields)
+    {
+        headerFile
+            << "\n            {\n"
+            << "                .fieldNumber = " << field.fieldNumber << ",\n"
+            << "                .fieldName = \"" << field.fieldName << "\",\n"
+            << "                .fieldType = \'" << field.fieldType << "\',\n"
+            << "                .numElements = " << field.numElements << ",\n"
+            << "                .fieldSize = " << field.fieldSize << ",\n"
+            << "                .fieldOffset = offsetof(" << std::uppercase << object.objectName <<"," << field.fieldName << ")\n"
+            << "            },";
+    }
+
+    headerFile
+        << "\n        },\n"
+        << "        .objectSize = sizeof("
+        << std::uppercase << object.objectName
+        << ")"
+        << "\n    };";
+
+    return RTN_OK;
+}
+
+RETCODE WriteObjectEnd( std::ofstream& headerFile, OBJECT_SCHEMA& object )
 {
     headerFile << "\n};";
     std::stringstream upperCaseSStream;
     upperCaseSStream << std::uppercase << std::string(object.objectName);
     const std::string& objName = upperCaseSStream.str();
-
-    /* Number of records */
-    headerFile << "\nstatic const size_t O_"
-        << objName
-        << "_NUM_RECORDS = "
-        << object.numberOfRecords
-        << ";\n";
-
-    /* Object number */
-    headerFile
-        << "static const size_t O_"
-        << objName
-        << "_OBJECT_NUMBER = "
-        << object.objectNumber
-        << ";\n";
 
     /* Object name */
     headerFile
@@ -265,24 +282,7 @@ RETCODE WriteObjectEnd( std::ofstream& headerFile, OBJECT_SCHEMA object )
         << objName
         << "\";";
 
-    /* Object size */
-    headerFile
-        << "\nstatic const size_t O_"
-        << objName
-        << "_SIZE = sizeof("
-        << objName
-        << ");\n";
-
-    /* DB size */
-    headerFile
-        << "static const size_t O_"
-        << objName
-        << "_DB_SIZE = O_"
-        << objName
-        <<  "_SIZE * "
-        << "O_"
-        << objName
-        << "_NUM_RECORDS;";
+    GenerateObjectInfo(headerFile, object);
 
     headerFile << "\n\n#endif";
 
@@ -439,12 +439,13 @@ static RETCODE OpenDBMapFile(std::ofstream& headerStream)
 static RETCODE WriteDBMapHeader(std::ofstream& headerStream)
 {
     headerStream << "//GENERATED FILE! DO NOT MODIFY\n";
+    headerStream << "#ifndef __DB_MAP_HH\n#define __DB_MAP_HH\n";
 
     headerStream <<
         "#include <string>\n#include <map>\n\n#include <allDBs.hh>\n";
 
     headerStream <<
-        "\nstatic std::map<std::string, size_t> dbSizes =\n\t{";
+        "\nstatic std::map<std::string, OBJECT_SCHEMA> dbSizes =\n    {";
 
     return RTN_OK;
 
@@ -456,19 +457,19 @@ static RETCODE WriteDBMapObject(std::ofstream& headerStream, const OBJECT_SCHEMA
     upperCaseSStream << std::uppercase << std::string(object_entry.objectName);
     const std::string& objName = upperCaseSStream.str();
     headerStream
-        << "\n\t\t{"
+        << "\n        {"
         << "O_"
         << objName
         << "_NAME, O_"
         << objName
-        << "_DB_SIZE},";
+        << "_INFO},";
 
     return RTN_OK;
 }
 
 static RETCODE WriteDBMapFooter(std::ofstream& headerStream)
 {
-    headerStream << "\n\t};";
+    headerStream << "\n    };\n\n#endif";
     return RTN_OK;
 }
 

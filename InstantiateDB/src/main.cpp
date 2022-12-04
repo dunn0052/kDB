@@ -8,17 +8,6 @@
 #include <string>
 #include <Logger.hh>
 
-class CLI_CharArrayTest : public CLI::CLI_Argument<char[20], 1, 1>
-{
-        using CLI_Argument::CLI_Argument;
-
-        bool TryConversion(const std::string& conversion, char (&value)[20])
-        {
-            memcpy(value, conversion.c_str(), sizeof(value));
-            return true;
-        }
-};
-
 static RETCODE GenerateDatabaseFile(const OBJECT& object_name, const std::string& dbPath)
 {
     RETCODE retcode = RTN_OK;
@@ -27,11 +16,11 @@ static RETCODE GenerateDatabaseFile(const OBJECT& object_name, const std::string
     const std::string& path = filepath.str();
     size_t fileSize = 0;
 
-    std::map<std::string, size_t>::iterator it = dbSizes.find(std::string(object_name));
+    std::map<std::string, OBJECT_SCHEMA>::iterator it = dbSizes.find(std::string(object_name));
     if(it != dbSizes.end())
     {
         //element found;
-        fileSize = it->second;
+        fileSize = it->second.objectSize * it->second.numberOfRecords;
     }
     else
     {
@@ -66,7 +55,7 @@ static RETCODE GenerateDatabaseFile(const OBJECT& object_name, const std::string
 int main(int argc, char* argv[])
 {
     CLI::Parser parse("InstantiateDB", "Generate and update db files");
-    CLI_CharArrayTest objectArg("--object", "Name of db object to generate");
+    CLI::CLI_OBJECTArgument objectArg("--object", "Name of db object to generate");
     CLI::CLI_FlagArgument allArg("-a", "Generate all db files");
     parse.AddArg(objectArg).AddArg(allArg);
 
@@ -93,7 +82,7 @@ int main(int argc, char* argv[])
         RETCODE retcode = RTN_OK;
         std::string db_path = INSTALL_DIR + DB_DB_DIR;
         OBJECT current_object = {0};
-        std::map<std::string, size_t>::iterator it;
+        std::map<std::string, OBJECT_SCHEMA>::iterator it;
         for (it = dbSizes.begin(); it != dbSizes.end(); it++)
         {
             strncpy(current_object, it->first.c_str(), sizeof(current_object));
@@ -109,6 +98,10 @@ int main(int argc, char* argv[])
                     db_path.c_str(), current_object);
             }
         }
+    }
+    else
+    {
+        parse.Usage();
     }
 
     return RTN_FAIL;
