@@ -8,6 +8,7 @@
 #include <iostream>
 #include <Logger.hh>
 #include <retcode.hh>
+#include <DOFRI.hh>
 
 namespace CLI
 {
@@ -119,7 +120,7 @@ namespace CLI
                 os << m_Description;
             }
 
-            const ArgType& GetValue(size_t index = 0)
+            ArgType& GetValue(size_t index = 0)
             {
                 return m_Values.at(index).value;
             }
@@ -188,6 +189,17 @@ namespace CLI
             return true;
         }
     };
+
+    class CLI_OBJECTArgument : public CLI::CLI_Argument<OBJECT, 1, 1>
+{
+        using CLI_Argument::CLI_Argument;
+
+        bool TryConversion(const std::string& conversion, OBJECT& value)
+        {
+            strncpy(value, conversion.c_str(), sizeof(value));
+            return true;
+        }
+};
 
     class Parser
     {

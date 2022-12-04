@@ -27,6 +27,9 @@
     // End of File
     constexpr RETCODE RTN_EOF = 0x0020;
 
+    // Bad argument
+    constexpr RETCODE RTN_BAD_ARG = 0x0040;
+
     #define IS_RETCODE_OK( RET ) (RTN_OK == RET)
 
     #define RETURN_RETCODE_IF_NOT_OK( RET ) \
