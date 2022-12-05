@@ -442,7 +442,7 @@ static RETCODE WriteDBMapHeader(std::ofstream& headerStream)
     headerStream << "#ifndef __DB_MAP_HH\n#define __DB_MAP_HH\n";
 
     headerStream <<
-        "#include <string>\n#include <map>\n\n#include <allDBs.hh>\n";
+        "#include <string>\n#include <map>\n\n#include <retcode.hh>\n#include <allDBs.hh>\n";
 
     headerStream <<
         "\nstatic std::map<std::string, OBJECT_SCHEMA> dbSizes =\n    {";
@@ -469,7 +469,23 @@ static RETCODE WriteDBMapObject(std::ofstream& headerStream, const OBJECT_SCHEMA
 
 static RETCODE WriteDBMapFooter(std::ofstream& headerStream)
 {
-    headerStream << "\n    };\n\n#endif";
+    headerStream << "\n    };";
+
+    headerStream
+        << "\n\nstatic RETCODE TryGetObjectInfo(const std::string& objectName, OBJECT_SCHEMA& object)\n"
+        << "{\n"
+        <<"    std::map<std::string, OBJECT_SCHEMA>::iterator it = dbSizes.find(std::string(objectName));\n"
+        <<"    if(it != dbSizes.end())\n"
+        <<"    {\n"
+        <<"        object = it->second;\n"
+        <<"        return RTN_OK;\n"
+        <<"    }\n"
+        <<"\n"
+        <<"    return RTN_NOT_FOUND;\n"
+        <<"}\n";
+
+    headerStream << "\n#endif";
+
     return RTN_OK;
 }
 
