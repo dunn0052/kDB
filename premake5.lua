@@ -392,7 +392,8 @@ project "UpdateDaemon"
 
     links
     {
-        "Logger"
+        "Logger",
+        "Threads::Threads"
     }
 
     defines

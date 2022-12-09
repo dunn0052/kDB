@@ -463,7 +463,7 @@ public:
 
         for(ProfileWriter& writer: m_Writers)
         {
-            writer.stop();
+            writer.Stop();
         }
     }
 

@@ -72,11 +72,13 @@ class DatabaseAccess
                 return RTN_NULL_OBJ;
             }
 
-            switch(m_Object.fields[dofri.f].fieldType)
+            size_t field_value = dofri.f - 1; // DB off by 1
+
+            switch(m_Object.fields[field_value].fieldType)
             {
                 case 'D': // Databse innacurate because its a string alias
                 {
-                    if(value.size() > m_Object.fields[dofri.f].numElements)
+                    if(value.size() > m_Object.fields[field_value].numElements)
                     {
                         return RTN_BAD_ARG;
                     }
@@ -87,7 +89,7 @@ class DatabaseAccess
                 }
                 case 'O': // Object
                 {
-                    if(value.size() > m_Object.fields[dofri.f].numElements)
+                    if(value.size() > m_Object.fields[field_value].numElements)
                     {
                         return RTN_BAD_ARG;
                     }
@@ -99,7 +101,7 @@ class DatabaseAccess
                 case 'C': // Char
                 case 'Y': // Unsigned char (byte)
                 {
-                    if(value.size() > m_Object.fields[dofri.f].numElements)
+                    if(value.size() > m_Object.fields[field_value].numElements)
                     {
                         return RTN_BAD_ARG;
                     }
@@ -162,8 +164,8 @@ class DatabaseAccess
             }
 
             std::stringstream db_value;
-
-            switch(m_Object.fields[dofri.f].fieldType)
+            size_t field_value = dofri.f - 1; // DB off by 1
+            switch(m_Object.fields[field_value].fieldType)
             {
                 case 'D': // Databse innacurate because its a string alias
                 {
@@ -179,7 +181,7 @@ class DatabaseAccess
                 case 'Y': // Unsigned char (byte)
                 {
                     db_value.rdbuf()->sputn(reinterpret_cast<char*>(p_value),
-                        sizeof(char) * m_Object.fields[dofri.f].numElements);
+                        sizeof(char) * m_Object.fields[field_value].numElements);
                     break;
                 }
                 case 'N': // signed integer
