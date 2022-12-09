@@ -68,7 +68,7 @@ public:
     }
 
     // Request the thread to stop by setting value in promise object
-    void stop()
+    void Stop()
     {
         if(m_Running)
         {

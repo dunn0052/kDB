@@ -260,7 +260,7 @@ public:
     {
         if(m_IsAccepting)
         {
-            m_AcceptTask.stop();
+            m_AcceptTask.Stop();
             close(m_ListeningSocket);
             return CloseAllConnections();
         }
