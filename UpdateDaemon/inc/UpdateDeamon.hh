@@ -4,6 +4,8 @@
 #include <DaemonThread.hh>
 #include <DatabaseAccess.hh>
 #include <INETMessenger.hh>
+#include <Logger.hh>
+#include <TasQ.hh>
 
 #include <map>
 #include <iostream>
@@ -102,15 +104,16 @@ void PrintDBObject(const OBJECT_SCHEMA& object, char* p_object, RECORD rec_num)
     std::cout << "\n";
 }
 
-class MonitorThread: public DaemonThread<const OBJECT&, RECORD, RECORD>
+class MonitorThread: public DaemonThread<const OBJECT&, RECORD, RECORD, TasQ<BASS>*, TasQ<BASS>*>
 {
 
 public:
-    void execute(const OBJECT& objectName, RECORD min_record, RECORD max_record)
+    void execute(const OBJECT& objectName, RECORD min_record, RECORD max_record, TasQ<BASS>* outgoing_objects, TasQ<BASS>* incoming_objects)
     {
         std::stringstream thread_write_stream;
         thread_write_stream << "Range: " << min_record << " -> " << max_record << "\n";
-        std::cout << thread_write_stream.str();
+        //std::cout << thread_write_stream.str();
+        LOG_INFO("%s", thread_write_stream.str().c_str());
         OBJECT_SCHEMA object_info;
         if(RTN_OK != TryGetObjectInfo(std::string(objectName), object_info))
         {
@@ -120,16 +123,12 @@ public:
 
         DatabaseAccess db_object = DatabaseAccess(objectName);
 
-        // Get pointer to beginning of db
+        // Get pointer to first record N
         char* p_read_pointer = db_object.Get(min_record);
-#if 0
-        // Get pointer to first record
-        char* p_write_pointer = p_read_pointer + object_info.objectSize;
-        char* p_write_pointer_base = p_read_pointer_base;
-#endif
         char* p_read_pointer_base = p_read_pointer;
 
-        char* p_read_pointers[8] =
+
+        char* p_read_pointers[8] = // 8 seemed like a good number no -- reason for it
             {
                 p_read_pointer,
                 p_read_pointer + object_info.objectSize,
@@ -141,7 +140,8 @@ public:
                 p_read_pointer + (object_info.objectSize * 7),
             };
 
-        BASS copy = {'a','l','e','c'};
+
+        BASS copy = {0};
 
         //RECORD current_record = min_record;
         RECORD record_end = std::min(object_info.numberOfRecords, max_record);
@@ -152,22 +152,33 @@ public:
         while (StopRequested() == false)
         {
 
+            // Loop through all records until end -- 8 at a time
             for(RECORD current_record = min_record; current_record < record_end; current_record += 8)
             {
                 for(char index = 0; index < 8; index++)
                 {
+                    #if 0
                     memcpy(p_read_pointers[index], &copy, sizeof(BASS));
                     m_TotalRecs++;
+                    #endif
+                    // Testing writing all changes to just first object in the 8
+                    while(incoming_objects->TryPop(copy))
+                    {
+                        LOG_INFO("MODIFY: %c %c %c %c", copy.E, copy.A, copy.D, copy.G);
+                        m_WroteRecs++;
+                    }
                 }
+
+                outgoing_objects->TryPush(copy);
 
                 for(char index = 0; index < 8; index++)
                 {
                     p_read_pointers[index] += object_info.objectSize;
                 }
 
-                current_record += 8;
             }
 
+            // Restart from beginning
             for(char index = 0; index < 8; index++)
             {
                 p_read_pointers[index] = p_read_pointer_base +
@@ -210,9 +221,7 @@ public:
 #endif
         }
 
-        thread_write_stream.str("");
-        thread_write_stream << "Monitored " << m_TotalRecs << " record(s)!\n";
-        std::cout << thread_write_stream.str();
+        LOG_INFO("Copied %lld record(s)!", m_TotalRecs);
     }
 
     RETCODE Read(const OBJECT_SCHEMA& object, char* p_object, RECORD record)

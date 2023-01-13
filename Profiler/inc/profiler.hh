@@ -478,7 +478,7 @@ private:
     ProfPool(const ProfPool&);
     ProfPool& operator=(const ProfPool&);
 
-    private:
+private:
         std::string m_Process_ID;
         std::string m_Profile_File_Name;
         std::ofstream m_Profile_JSON;
