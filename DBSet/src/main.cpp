@@ -4,6 +4,7 @@
 #include <DBMap.hh>
 #include <DOFRI.hh>
 #include <DatabaseAccess.hh>
+#include <INETMessenger.hh>
 
 static RETCODE UpdateDBValue(DOFRI& dofri, const std::string& value)
 {

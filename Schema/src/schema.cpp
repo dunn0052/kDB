@@ -50,7 +50,7 @@ static RETCODE GenerateObjectHeader(OBJECT_SCHEMA& object, std::ofstream& header
     /* Header guard */
     headerFile << "#ifndef " << std::uppercase << object.objectName << "__HH";
     headerFile << "\n#define " << std::uppercase << object.objectName << "__HH";
-    headerFile << "\n\n#include <DOFRI.hh>\n#include<ObjectSchema.hh>\n"; // maybe..
+    headerFile << "\n\n#include <DOFRI.hh>\n#include <ObjectSchema.hh>\n"; // maybe..
 
     headerFile
         << "\nstruct "
