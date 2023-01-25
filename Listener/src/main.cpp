@@ -5,19 +5,42 @@
 #include <DatabaseSubscription.hh>
 #include <TasQ.hh>
 
-class WriteThread: public DaemonThread<TasQ<std::string>*>
+void PrintClientConnect(const CONNECTION& connection)
 {
-    void execute(TasQ<std::string>* p_queue)
+    LOG_INFO("Client connected %s:%d", connection.address, connection.port);
+}
+
+void PrintServerConnect(const CONNECTION& connection)
+{
+    LOG_INFO("Server connected to %s:%d", connection.address, connection.port);
+}
+
+void PrintDisconnect(const CONNECTION& connection)
+{
+    LOG_INFO("Connection disconnected %s:%d", connection.address, connection.port);
+}
+
+void PrintMessage(const CONNECTION& connection, const char*)
+{
+    LOG_INFO("Connection %s:%d send a message!", connection.address, connection.port);
+}
+
+class WriteThread: public DaemonThread<TasQ<INET_PACKAGE*>*>
+{
+    void execute(TasQ<INET_PACKAGE*>* p_queue)
     {
         std::string user_input;
         RETCODE retcode = RTN_OK;
 
-        TasQ<std::string>& messages = *p_queue;
+        TasQ<INET_PACKAGE*>& messages = *p_queue;
 
         while(StopRequested() == false)
         {
             std::cin >> user_input;
-            messages.Push(user_input);
+            INET_PACKAGE* message = reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + user_input.length()]);
+            message->header.message_size = user_input.length();
+            strncpy(message->payload, user_input.c_str(), user_input.length());
+            messages.Push(message);
         }
     }
 
@@ -48,21 +71,21 @@ int main(int argc, char* argv[])
         return 0;
     }
 
-    int connected_socket = -1;
+    TasQ<INET_PACKAGE*> messages;
 
     if(RTN_OK == parseRetcode)
     {
         RETCODE retcode = RTN_OK;
-        INETMessenger connection(listeningPortArg.GetValue());
+        PollThread connection(listeningPortArg.GetValue());
 
-        retcode = connection.Listen();
         if(RTN_OK != retcode)
         {
             LOG_WARN("Failed to start listening!\nExiting\n");
             return retcode;
         }
-        LOG_INFO("Listening for connections on: %s:%s", connection.GetAddress().c_str(), connection.GetPort().c_str());
+        LOG_INFO("Listening for connections on: %s:%s", connection.GetTCPAddress().c_str(), connection.GetTCPPort().c_str());
 
+        // Connection if requested
         if(connectionAddressArg.IsInUse() && connectionPortArg.IsInUse())
         {
             // If we're the initiator then try connect
@@ -71,63 +94,32 @@ int main(int argc, char* argv[])
             if(RTN_OK != retcode)
             {
                 LOG_WARN("Couldn't connect to %s:%s\nExiting...",
-                    connection.GetConnectedAddress().c_str(), connectionPortArg.GetValue().c_str());
+                    connection.GetTCPAddress().c_str(), connectionPortArg.GetValue().c_str());
             }
             LOG_INFO("Connected to %s:%s with socket %d",
-                connection.GetConnectedAddress().c_str(), connectionPortArg.GetValue().c_str(), connection.GetConnectionSocket());
+                connection.GetTCPAddress().c_str(), connectionPortArg.GetValue().c_str(), connection.GetTCPSocket());
 
+            WriteThread* writer_thread = new WriteThread();
+            writer_thread->Start(&messages);
         }
 
-        TasQ<std::string> messages;
-        WriteThread* writer_thread = new WriteThread();
-        writer_thread->Start(&messages);
+        connection.m_OnClientConnect += PrintClientConnect;
+        connection.m_OnServerConnect += PrintServerConnect;
+        connection.m_OnDisconnect += PrintDisconnect;
+        connection.m_OnReceive += PrintMessage;
+
 
         if(RTN_OK == retcode)
         {
-            char buffer[1000] = {0};
             bool connected = true;
-            std::string user_input;
+            INET_PACKAGE* message;
             RETCODE retcode = RTN_OK;
-
-            auto start_time = std::chrono::system_clock::now();
-
-            std::vector<size_t> bad_connections;
             while(connected)
             {
-                for(CONNECTION& con : connection.m_Connections)
+                while(messages.TryPop(message))
                 {
-                    if(con.socket != 0)
-                    {
-                        retcode = connection.Receive(con.socket, buffer, 999);
-                    }
-#if 0
-                    if(RTN_CONNECTION_FAIL == retcode)
-                    {
-                        LOG_WARN("Connection %s:%d closed!", con.address, con.socket);
-                        //connected = false;
-                        //con.socket = 0;
-                        //retcode = RTN_OK;
-                        //continue;
-                    }
-#endif
-                    if(RTN_OK == retcode)
-                    {
-                        buffer[1000] = '\0';
-                        LOG_INFO("Other: %s", buffer);
-                        memset(buffer, 0, sizeof(buffer));
-                    }
-                }
-
-                while(messages.TryPop(user_input))
-                {
-                    connection.SendToAll(user_input);
-                }
-
-                // Poll every 5 seconds
-                if(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - start_time).count() > 5)
-                {
-                    connection.GetAcceptedConnections();
-                    start_time = std::chrono::high_resolution_clock::now();
+                    strncpy(message->header.connection_token.address, connectionAddressArg.GetValue().c_str(), sizeof(message->header.connection_token.address));
+                    connection.Send(message);
                 }
 
                 usleep(100);
