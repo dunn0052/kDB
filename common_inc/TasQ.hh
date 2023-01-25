@@ -1,7 +1,98 @@
+#ifndef __TASQ_HH
+#define __TASQ_HH
+
 #include <mutex>
 #include <condition_variable>
 #include <queue>
+#include <unordered_map>
 #include <DaemonThread.hh>
+
+template <class Key, class Element>
+class TasM
+{
+    private:
+        std::unordered_map<Key, Element> m_ElementMap;
+        bool m_Done;
+        std::mutex n_Mutex;
+        std::condition_variable n_ReadyCondition;
+
+    public:
+        TasM()
+            : m_ElementMap(), m_Done(false), n_Mutex(), n_ReadyCondition()
+        {
+        }
+
+        void done()
+        {
+            n_Mutex.lock();
+            m_Done = true;
+            n_Mutex.unlock();
+
+            n_ReadyCondition.notify_all();
+        }
+
+        bool Get(Key& key, Element& result)
+        {
+            std::unique_lock lock = std::unique_lock{n_Mutex};
+            while(m_ElementMap.find(key) == m_ElementMap.end() && !m_Done)
+            {
+                n_ReadyCondition.wait(lock);
+            }
+
+            if(m_ElementMap.find(key) == m_ElementMap.end())
+            {
+                return false;
+            }
+
+            result = m_ElementMap.at(key);
+
+            return true;
+        }
+
+        bool TryGet(Key& key, Element& result)
+        {
+
+            if(!n_Mutex.try_lock())
+            {
+                return false;
+            }
+
+            if(m_ElementMap.find(key) == m_ElementMap.end())
+            {
+                n_Mutex.unlock();
+                return false;
+            }
+
+            result = m_ElementMap.at(key);
+
+            n_Mutex.unlock();
+
+            return true;
+        }
+
+        void Put(Key& key, Element& result)
+        {
+            n_Mutex.lock();
+            m_ElementMap.emplace(key, result);
+            n_Mutex.unlock();
+
+            n_ReadyCondition.notify_one();
+        }
+
+        bool TryPut(Key& key, Element& result)
+        {
+            if(!n_Mutex.try_lock())
+            {
+                return false;
+            }
+
+            m_ElementMap.emplace(key, result);
+
+            n_Mutex.unlock();
+            n_ReadyCondition.notify_one();
+            return true;
+        }
+};
 
 template <class Element>
 class TasQ
@@ -37,7 +128,6 @@ class TasQ
 
             if(m_ResultQueue.empty())
             {
-                result.m_End = 0; // Denote empty result
                 return false;
             }
 
@@ -52,14 +142,12 @@ class TasQ
 
             if(!n_Mutex.try_lock())
             {
-                result.m_End = 0;
                 return false;
             }
 
             if(m_ResultQueue.empty())
             {
                 n_Mutex.unlock();
-                result.m_End = 0;
                 return false;
             }
 
@@ -71,23 +159,23 @@ class TasQ
             return true;
         }
 
-        void Push(Element&& result)
+        void Push(Element& result)
         {
             n_Mutex.lock();
-            m_ResultQueue.push(std::move(result));
+            m_ResultQueue.push(result);
             n_Mutex.unlock();
 
             n_ReadyCondition.notify_one();
         }
 
-        bool TryPush(Element&& result)
+        bool TryPush(Element& result)
         {
             if(!n_Mutex.try_lock())
             {
                 return false;
             }
 
-            m_ResultQueue.push(std::move(result));
+            m_ResultQueue.push(result);
 
             n_Mutex.unlock();
             n_ReadyCondition.notify_one();
@@ -95,6 +183,7 @@ class TasQ
         }
 };
 
+#if 0
 template <class Element>
 class TaskWorker : public DaemonThread<std::vector<TasQ<Element>>*>
 {
@@ -258,3 +347,6 @@ private:
         std::vector<TasQ> m_Queues;
         bool m_Ready;
 };
+
+#endif
+#endif
