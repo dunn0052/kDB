@@ -5,6 +5,15 @@
 #include <DatabaseSubscription.hh>
 #include <TasQ.hh>
 
+static bool running = true;
+
+static void quit_signal(int sig)
+{
+    LOG_INFO("Signal %d caught!", sig);
+    LOG_INFO("Ending Listener");
+    running = false;
+}
+
 void PrintClientConnect(const CONNECTION& connection)
 {
     LOG_INFO("Client connected %s:%d", connection.address, connection.port);
@@ -20,9 +29,9 @@ void PrintDisconnect(const CONNECTION& connection)
     LOG_INFO("Connection disconnected %s:%d", connection.address, connection.port);
 }
 
-void PrintMessage(const CONNECTION& connection, const char*)
+void PrintMessage(const CONNECTION& connection, const char* message)
 {
-    LOG_INFO("Connection %s:%d send a message!", connection.address, connection.port);
+    LOG_INFO("Connection %s:%d send a message: %s", connection.address, connection.port, message);
 }
 
 class WriteThread: public DaemonThread<TasQ<INET_PACKAGE*>*>
@@ -37,9 +46,9 @@ class WriteThread: public DaemonThread<TasQ<INET_PACKAGE*>*>
         while(StopRequested() == false)
         {
             std::cin >> user_input;
-            INET_PACKAGE* message = reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + user_input.length()]);
-            message->header.message_size = user_input.length();
-            strncpy(message->payload, user_input.c_str(), user_input.length());
+            INET_PACKAGE* message = reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + user_input.length() + 1]);
+            message->header.message_size = user_input.length() + 1;
+            strncpy(message->payload, user_input.c_str(), user_input.length() + 1);
             messages.Push(message);
         }
     }
@@ -48,6 +57,8 @@ class WriteThread: public DaemonThread<TasQ<INET_PACKAGE*>*>
 
 int main(int argc, char* argv[])
 {
+    signal(SIGQUIT, quit_signal);
+    signal(SIGINT, quit_signal);
     CLI::Parser parse("Listener", "Listen for database updates");
     CLI::CLI_StringArgument connectionAddressArg("-c", "Connection address for Other", false);
     CLI::CLI_StringArgument connectionPortArg("-p", "Connection port for Other", false);
@@ -70,8 +81,6 @@ int main(int argc, char* argv[])
         parse.Usage();
         return 0;
     }
-
-    TasQ<INET_PACKAGE*> messages;
 
     if(RTN_OK == parseRetcode)
     {
@@ -99,8 +108,6 @@ int main(int argc, char* argv[])
             LOG_INFO("Connected to %s:%s with socket %d",
                 connection.GetTCPAddress().c_str(), connectionPortArg.GetValue().c_str(), connection.GetTCPSocket());
 
-            WriteThread* writer_thread = new WriteThread();
-            writer_thread->Start(&messages);
         }
 
         connection.m_OnClientConnect += PrintClientConnect;
@@ -108,18 +115,21 @@ int main(int argc, char* argv[])
         connection.m_OnDisconnect += PrintDisconnect;
         connection.m_OnReceive += PrintMessage;
 
+        TasQ<INET_PACKAGE*> messages;
+        WriteThread* writer_thread = new WriteThread();
+        writer_thread->Start(&messages);
+
 
         if(RTN_OK == retcode)
         {
-            bool connected = true;
             INET_PACKAGE* message;
             RETCODE retcode = RTN_OK;
-            while(connected)
+            while(running)
             {
                 while(messages.TryPop(message))
                 {
-                    strncpy(message->header.connection_token.address, connectionAddressArg.GetValue().c_str(), sizeof(message->header.connection_token.address));
-                    connection.Send(message);
+                    //strncpy(message->header.connection_token.address, connectionAddressArg.GetValue().c_str(), sizeof(message->header.connection_token.address));
+                    connection.SendAll(message);
                 }
 
                 usleep(100);

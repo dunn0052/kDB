@@ -7,6 +7,8 @@ constexpr int _SERVER_VERSION = 1;
 #include <DOFRI.hh>
 #include <DaemonThread.hh>
 #include <TasQ.hh>
+#include <Hook.hh>
+#include "../Profiler/inc/profiler.hh"
 
 #include <vector>
 #include <string>
@@ -24,7 +26,6 @@ constexpr int _SERVER_VERSION = 1;
 #include <signal.h>
 #include <sys/mman.h>
 #include <sstream>
-#include <Hook.hh>
 
 struct CONNECTION
 {
@@ -129,9 +130,25 @@ class PollThread: public DaemonThread<int>
 
 public:
 
+    RETCODE SendAll(INET_PACKAGE* package)
+    {
+        PROFILE_FUNCTION();
+        for(std::unordered_map<CONNECTION,int>::iterator iter = m_ConnectionMap.begin(); iter != m_ConnectionMap.end(); ++iter)
+        {
+            INET_PACKAGE* message = reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + package->header.message_size]);
+            message->header.message_size = package->header.message_size;
+            message->header.connection_token = iter->first;
+            memcpy(message->payload, package->payload, message->header.message_size);
+            m_SendQueue.Push(message);
+        }
+
+        return RTN_OK;
+    }
+
     // Use your own memory
     RETCODE Send(INET_PACKAGE* package)
     {
+        PROFILE_FUNCTION();
         // Wait until send goes through
         m_SendQueue.Push(package);
         return RTN_OK;
@@ -141,6 +158,7 @@ public:
     template<class DATA>
     RETCODE Send(const DATA& data, size_t connection_token)
     {
+        PROFILE_FUNCTION();
         INET_PACKAGE* package = new char[sizeof(DATA) + sizeof(INET_PACKAGE)];
         package->header.message_size = sizeof(DATA);
         package->header.connection_token = connection_token;
@@ -151,17 +169,19 @@ public:
 
     RETCODE Receive(INET_PACKAGE* message)
     {
+        PROFILE_FUNCTION();
         // Try to get a value
         return m_ReceiveQueue.TryPop(message) ? RTN_OK : RTN_NOT_FOUND;
     }
 
     void execute(int dummy = 0)
     {
+        PROFILE_FUNCTION();
         RETCODE retcode = RTN_OK;
         int num_poll_events = 0;
         int err = 0;
         int ret = 0;
-        int timeout = 3000; /* in milliseconds */
+        int timeout = 10; /* in milliseconds */
         int maxevents = 64;
         struct epoll_event events[64];
 
@@ -244,6 +264,7 @@ public:
         m_Ready(false), m_PollFD(-1), m_TCPSocket(-1), m_Port(portNumber),
         m_Address(), m_SendQueue(), m_ReceiveQueue()
     {
+        PROFILE_FUNCTION();
         RETCODE retcode = GetConnectionForSelf();
         retcode |= InitPoll();
         retcode |= AddFDToPoll(m_TCPSocket, EPOLLIN | EPOLLPRI);
@@ -261,6 +282,7 @@ public:
 
     RETCODE GetConnectionForSelf(void)
     {
+        PROFILE_FUNCTION();
         struct addrinfo hints = {0};
         struct addrinfo *returnedAddrInfo = nullptr;
         struct addrinfo *currentAddrInfo = nullptr;
@@ -339,6 +361,7 @@ public:
 
     RETCODE Connect(const std::string& address, const std::string& port)
     {
+        PROFILE_FUNCTION();
         struct addrinfo hints = {0};
         struct addrinfo *returnedAddrInfo = nullptr;
         struct addrinfo *currentAddrInfo = nullptr;
@@ -405,7 +428,16 @@ public:
         RETCODE retcode = SendAck(connectedSocket, ack);
         if(RTN_OK == retcode)
         {
+            // Non-block set for smooth receives and sends
+            if(fcntl(connectedSocket, F_SETFL, fcntl(connectedSocket, F_GETFL) | O_NONBLOCK) < 0)
+            {
+                return RTN_FAIL;
+            }
+
             memcpy(conn.address, accepted_address, sizeof(conn.address));
+            std::stringstream portstream(port);
+            portstream >> conn.port;
+            conn.socket = connectedSocket;
             AddFDToPoll(connectedSocket, EPOLLIN | EPOLLPRI);
             m_ConnectionMap[conn] = connectedSocket;
             m_FDMap[connectedSocket] = conn;
@@ -425,6 +457,7 @@ public:
 
     RETCODE StopListeningForAccepts()
     {
+        PROFILE_FUNCTION();
         if(m_Ready)
         {
             m_Ready = false;
@@ -438,6 +471,7 @@ public:
 
     RETCODE HandleEvent(const CONNECTION& connection, int fd, uint32_t revents)
     {
+        PROFILE_FUNCTION();
         RETCODE retcode = RTN_OK;
         int err;
         ssize_t recv_ret;
@@ -514,6 +548,7 @@ public:
 
     RETCODE HandleSends(void)
     {
+        PROFILE_FUNCTION();
         int message_length = 0;
         int socket;
         INET_PACKAGE* packet;
@@ -542,6 +577,7 @@ public:
 
     RETCODE AcceptNewClient()
     {
+        PROFILE_FUNCTION();
         RETCODE retcode = RTN_OK;
         struct sockaddr incoming_accepted_address;
         socklen_t incoming_address_size = sizeof(incoming_accepted_address);
@@ -570,6 +606,7 @@ public:
                 memcpy(connection.address, accepted_address, sizeof(connection.address));
                 std::stringstream portstream(m_Port);
                 portstream >> connection.port;
+
                 // Non-block set for smooth receives and sends
                 if(fcntl(accept_socket, F_SETFL, fcntl(accept_socket, F_GETFL) | O_NONBLOCK) < 0)
                 {
@@ -606,6 +643,7 @@ public:
 
     RETCODE AddFDToPoll(int fd, uint32_t events)
     {
+        PROFILE_FUNCTION();
         int err;
         struct epoll_event event;
 
@@ -631,6 +669,7 @@ public:
 
     RETCODE RemoveFDFromPoll(int fd)
     {
+        PROFILE_FUNCTION();
         int err;
 
         if (0 > epoll_ctl(m_PollFD, EPOLL_CTL_DEL, fd, NULL))
@@ -664,6 +703,7 @@ public:
 
     RETCODE InitPoll()
     {
+        PROFILE_FUNCTION();
         int err;
 
         /* The epoll_create argument is ignored on modern Linux */
@@ -1001,8 +1041,6 @@ public:
         freeaddrinfo(returnedAddrInfo);
 
         CONNECTION connection{0, '\0'};
-        // We must send CLIENT_TO_SERVER, but we make requests on what type
-        //ACKNOWLEDGE ack = {_SERVER_VERSION, CLIENT_TO_SERVER, SEND | RECEIVE};
 
         // Send our server version to server to match
         RETCODE retcode = RTN_OK;//SendAck(connectedSocket, ack);
