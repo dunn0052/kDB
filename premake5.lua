@@ -249,7 +249,8 @@ project "Listener"
 
     defines
     {
-        "__ENABLE_LOGGING"
+        "__ENABLE_LOGGING",
+        -- "__ENABLE_PROFILING"
     }
 
 project "Profiler"
