@@ -8,6 +8,7 @@
 #include <iostream>
 #include <Logger.hh>
 #include <retcode.hh>
+#include <DOFRI.hh>
 
 namespace CLI
 {
@@ -56,6 +57,12 @@ namespace CLI
             virtual void print(std::ostream& os) const = 0;
     };
 
+    template <class ArgType>
+    struct ArgContainer
+    {
+        ArgType value;
+    };
+
     template <class ArgType, size_t MinRequiredValues, size_t MaxRequiredValues>
     class CLI_Argument : public CLI_Argument_Interface
     {
@@ -63,7 +70,8 @@ namespace CLI
             CLI_Argument(const std::string& option, const std::string& desc = "", bool required = false)
                 : m_Option(option), m_Options(), m_Description(desc), m_InUse(false), m_IsRequired(required),
                   m_MinRequiredValues(MinRequiredValues), m_MaxRequiredValues(MaxRequiredValues)
-                { };
+                {
+                };
 
         public:
             size_t m_MinRequiredValues;
@@ -78,10 +86,10 @@ namespace CLI
 
             virtual bool AddValue(std::string& cli_argument)
             {
-                ArgType value;
-                if(TryConversion(cli_argument, value))
+                ArgContainer<ArgType> container;
+                if(TryConversion(cli_argument, container.value))
                 {
-                    m_Values.push_back(value);
+                    m_Values.push_back(container);
                     InUse();
                     return true;
                 }
@@ -112,9 +120,9 @@ namespace CLI
                 os << m_Description;
             }
 
-            const ArgType& GetValue(size_t index = 0)
+            ArgType& GetValue(size_t index = 0)
             {
-                return m_Values.at(index);
+                return m_Values.at(index).value;
             }
 
         protected:
@@ -126,7 +134,7 @@ namespace CLI
             std::string m_Description;
             bool m_InUse;
             bool m_IsRequired;
-            std::vector<ArgType> m_Values;
+            std::vector<ArgContainer<ArgType>> m_Values;
     };
 
 
@@ -181,6 +189,17 @@ namespace CLI
             return true;
         }
     };
+
+    class CLI_OBJECTArgument : public CLI::CLI_Argument<OBJECT, 1, 1>
+{
+        using CLI_Argument::CLI_Argument;
+
+        bool TryConversion(const std::string& conversion, OBJECT& value)
+        {
+            strncpy(value, conversion.c_str(), sizeof(value));
+            return true;
+        }
+};
 
     class Parser
     {

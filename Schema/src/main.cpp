@@ -1,4 +1,6 @@
 #include <schema.hh>
+#include <CLI.hh>
+#include <Constants.hh>
 
 class CLI_DatabaseArgs : public CLI::CLI_Argument<OBJECT, 1, 1>
 {
@@ -6,36 +8,66 @@ class CLI_DatabaseArgs : public CLI::CLI_Argument<OBJECT, 1, 1>
 
         bool TryConversion(const std::string& conversion, OBJECT& value)
         {
-            value = conversion;
-            return true;
+            if(OBJECT_NAME_LEN >= conversion.length())
+            {
+                memcpy(value, conversion.c_str(), sizeof(value));
+                return true;
+            }
+
+            return false;
         }
 };
 
+static std::string currentDirectory(char* argv[])
+{
+    std::string path = std::string(argv[0]);
+    return path.substr(0, path.find_last_of("\\/"));
+}
+
 int main(int argc, char* argv[])
 {
-
-    CLI_DatabaseArgs databaseArgs("--object", "Name of database object", true);
-    CLI::CLI_IntArgument sizeArg("-s", "New size of database object");
-    CLI::Parser parser = CLI::Parser("Schema", "Verify schema, Modify databases, and Generate Header Files")
-        .AddArg(sizeArg)
+    CLI_DatabaseArgs databaseArgs("--object", "Name of database object");
+    CLI::CLI_StringArgument inc_path("-h", "Path to write object header file");
+    CLI::CLI_StringArgument skm_path("-s", "Path to write object schema file");
+    CLI::CLI_FlagArgument all_arg("-a", "Build all schema");
+    CLI::Parser parser = CLI::Parser("Schema",
+        "Verify schema, Modify databases, and Generate Header Files")
+        .AddArg(inc_path)
+        .AddArg(skm_path)
+        .AddArg(all_arg)
         .AddArg(databaseArgs);
 
     RETCODE retcode = parser.ParseCommandLineArguments(argc, argv);
 
+    const std::string db_schema_path = skm_path.IsInUse() ?
+        skm_path.GetValue() : INSTALL_DIR + DB_SKM_DIR;
+
+    const std::string db_header_path = inc_path.IsInUse() ?
+        inc_path.GetValue() : INSTALL_DIR + DB_INC_DIR;
+
     if( databaseArgs.IsInUse() )
     {
-        const OBJECT objectName = databaseArgs.GetValue(0);
-        RETCODE retcode = GenerateObjectDBFiles(objectName);
-        if(RTN_OK != retcode)
+        const OBJECT& objectName = databaseArgs.GetValue();
+        #if 0
+        retcode |= GenerateObjectDBFiles(objectName,
+            db_schema_path,
+            db_header_path);
+        #endif
+        if(!IS_RETCODE_OK(retcode))
         {
-            LOG_WARN("Failed generating files for %s", objectName.c_str());
+            LOG_WARN("Failed generating files for %s", objectName);
+        }
+    }
+    else if(all_arg.IsInUse())
+    {
+        retcode |= GenerateAllDBFiles(
+            db_schema_path, db_header_path);
+
+        if(!IS_RETCODE_OK(retcode))
+        {
+            LOG_WARN("Failed generating files!");
         }
     }
 
-    if( sizeArg.IsInUse() )
-    {
-
-    }
-
-    return 0;
+    return retcode;
 }

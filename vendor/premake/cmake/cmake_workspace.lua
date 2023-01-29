@@ -75,6 +75,7 @@ function m.generate(wks)
     p.pop('endif()')
     p.w()
 
+    --[[
     -- Clear default flags
     p.w('set(CMAKE_MSVC_RUNTIME_LIBRARY "")')
     p.w('set(CMAKE_C_FLAGS "")')
@@ -84,6 +85,7 @@ function m.generate(wks)
         p.w('set(CMAKE_CXX_FLAGS_%s "")', string.upper(cfg))
     end
     p.w()
+    ]]
 
     p.w('project("%s")', wks.name)
 

@@ -3,9 +3,12 @@
 
 #include <string>
 
-typedef std::string DATABASE;
-typedef std::string OBJECT;
-typedef std::string FIELD;
+constexpr size_t DATABASE_NAME_LEN = 20;
+constexpr size_t OBJECT_NAME_LEN = 20;
+
+typedef char DATABASE[DATABASE_NAME_LEN];
+typedef char OBJECT[OBJECT_NAME_LEN];
+typedef unsigned int FIELD;
 typedef unsigned int RECORD;
 typedef unsigned int INDEX;
 

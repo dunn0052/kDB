@@ -15,9 +15,9 @@ public:
     template <typename ... EventArgs>
     void Invoke(EventArgs&& ... args)
     {
-        for (DelegateType& delegate)
+        for (DelegateType delegate : m_Delegates)
         {
-            delegate(std::forward<Args>(args)...)
+            delegate(std::forward<EventArgs>(args)...);
         }
     }
     void Clear()
@@ -37,7 +37,7 @@ public:
     }
 
 private:
-    const std::vector<DelegateType> m_Delegates;
+    std::vector<DelegateType> m_Delegates;
 };
 
    /* EXAMPLE */

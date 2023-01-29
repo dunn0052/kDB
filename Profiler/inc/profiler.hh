@@ -69,7 +69,7 @@ typedef uint64_t nanosec;
 
 static const std::string JSON_EXT = ".json";
 
-static inline nanosec SEC_TO_NS(time_t sec) { return (sec * 1000000000); }
+static inline nanosec SEC_TO_NS(time_t sec) { return (sec * 1000000000U); }
 
 struct ProfileResult
 {
@@ -262,7 +262,8 @@ public:
     }
 
     ProfileWriter(const std::string& filepath, size_t writer_id)
-        : m_json_filename(filepath), writer_index(writer_id), m_Running(false)
+        : m_FirstEntry(true), m_json_filename(filepath),
+          writer_index(writer_id), m_Running(false)
         {
         }
 
@@ -295,9 +296,9 @@ public:
                 << (result.m_End - result.m_Start)
                 << ",\"name\":\""
                 << result.m_Name
-                << "\",\"ph\":\"X\",\"pid\":"
+                << "\",\"ph\":\"X\",\"pid\":\""
                 << result.m_ProcessName
-                << ",\"tid\":"
+                << "\",\"tid\":"
                 << result.m_ThreadID
                 << ",\"ts\":"
                 << result.m_Start << "}";
@@ -463,7 +464,7 @@ public:
 
         for(ProfileWriter& writer: m_Writers)
         {
-            writer.stop();
+            writer.Stop();
         }
     }
 
@@ -478,7 +479,7 @@ private:
     ProfPool(const ProfPool&);
     ProfPool& operator=(const ProfPool&);
 
-    private:
+private:
         std::string m_Process_ID;
         std::string m_Profile_File_Name;
         std::ofstream m_Profile_JSON;

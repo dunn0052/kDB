@@ -4,8 +4,9 @@
 #include <ostream>
 #include <TextModifiers.hh>
 #include <compiler_defines.hh>
+#include <mutex>
 
-#if _ENABLE_LOGGING
+#if __ENABLE_LOGGING
     #define LOG_TEMPLATE( MESSAGE, LEVEL,  ... ) Log::Logger::Instance().Log(Log::LogLevel::LEVEL, #LEVEL , __FILE__, __LINE__, MESSAGE, ##__VA_ARGS__ )
 #else
     #define LOG_TEMPLATE( MESSAGE, LEVEL, ... )
@@ -57,7 +58,7 @@ namespace Log
         static const TextMod::Modifier TEXT_COLOR_DEFAULT;
 
         // thread guard
-        //std::mutex mMutex;
+        std::mutex mMutex;
     };
 
 }

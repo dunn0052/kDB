@@ -19,7 +19,7 @@ namespace Log
 
     void Logger::Log(LogLevel level, const char* debugLevel, const char* fileName, int lineNum, const char* format, ...)
     {
-        //const std::lock_guard<std::mutex> lock(mMutex);
+        const std::lock_guard<std::mutex> lock(mMutex);
         char LOG_PREFIX[1024] = "";
 
         if (level != m_LogLevel)
@@ -60,7 +60,7 @@ namespace Log
         }
 
         std::cout << TEXT_COLOR << "[" << debugLevel << "]";
- #ifdef _LOG_SHOW_LINE
+ #ifdef __LOG_SHOW_LINE
                 std::cout << "[" << fileName << ":" << lineNum << "]";
  #endif
         std::cout << " ";

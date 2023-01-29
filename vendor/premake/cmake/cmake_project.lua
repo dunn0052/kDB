@@ -145,11 +145,21 @@ function m.generate(prj)
         _p(')')
 
         if m.pthread then
-			-- Have to do this awkard thing to include pthread
+        -- Have to do this awkard thing to include pthread
             _p("set(THREADS_PREFER_PTHREAD_FLAG ON)")
             _p("find_package(Threads REQUIRED)")
             m.pthread = false
         end
+
+        -- post build commands
+        _p('if(CMAKE_BUILD_TYPE STREQUAL %s)', cmake.cfgname(cfg))
+        _p(1, 'add_custom_command(TARGET %s POST_BUILD', prj.name)
+        _p(2, 'WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}')
+        for _, postcommand in ipairs(cfg.postbuildcommands) do
+            _p(2, 'COMMAND %s', postcommand)
+        end
+        _p(1,')')
+        _p('endif()')
 
         -- setting build options
         all_build_options = ""
@@ -248,12 +258,12 @@ function m.generate(prj)
             _p('endif()')
         end
 
-        if(cfg.symbols ~= nil and cfg.symbols == "On") then
+        if(cfg.symbols ~= nil and cfg.symbols == 'On') then
             _p("set(CMAKE_C_FLAGS_%s %s)", string.upper(cmake.cfgname(cfg)), "-g3")
             _p("set(CMAKE_CXX_FLAGS_%s %s)", string.upper(cmake.cfgname(cfg)), "-g3")
         end
 
-        if(cfg.optomize ~= nil and cfg.optomize == "On") then
+        if(cfg.optomize ~= nil and cfg.optomize == 'On') then
             _p("set(CMAKE_C_FLAGS_%s %s)", string.upper(cmake.cfgname(cfg)), "-O3 -DNDEBUG")
             _p("set(CMAKE_CXX_FLAGS_%s %s)", string.upper(cmake.cfgname(cfg)), "-O3 -DNDEBUG")
         end

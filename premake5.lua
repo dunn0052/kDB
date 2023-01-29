@@ -129,7 +129,13 @@ project "Schema"
 
     defines
     {
+        "__ENABLE_LOGGING",
+        "__LOG_SHOW_LINE"
+    }
 
+    postbuildcommands
+    {
+        "Schema -a"
     }
 
 project "DBMapper"
@@ -166,6 +172,11 @@ project "DBMapper"
     defines
     {
 
+    }
+
+    dependson
+    {
+        "Schema"
     }
 
 project "Talker"
@@ -238,6 +249,8 @@ project "Listener"
 
     defines
     {
+        "__ENABLE_LOGGING",
+        -- "__ENABLE_PROFILING"
     }
 
 project "Profiler"
@@ -273,12 +286,135 @@ project "Profiler"
         "__ENABLE_PROFILING"
     }
 
+
+project "InstantiateDB"
+    location "InstantiateDB"
+    kind "ConsoleApp"
+    language "C++"
+    cppdialect "C++17"
+    systemversion "latest" -- compiler version
+
+    targetdir(targetbuilddir)
+    objdir(intermediatedir)
+    libdirs(sharedbuildlibs)
+
+    files
+    {
+        projectsrc,
+        projectinc
+    }
+
+    includedirs
+    {
+        commoninc,
+        projincpath,
+        dbincdir
+    }
+
+    links
+    {
+        "Logger"
+    }
+
+    defines
+    {
+        "__ENABLE_LOGGING",
+        "__LOG_SHOW_LINE"
+    }
+
+    dependson
+    {
+        "Schema"
+    }
+
+project "DBSet"
+    location "DBSet"
+    kind "ConsoleApp"
+    language "C++"
+    cppdialect "C++17"
+    systemversion "latest" -- compiler version
+
+    targetdir(targetbuilddir)
+    objdir(intermediatedir)
+    libdirs(sharedbuildlibs)
+
+    files
+    {
+        projectsrc,
+        projectinc
+    }
+
+    includedirs
+    {
+        commoninc,
+        projincpath,
+        dbincdir
+    }
+
+    links
+    {
+        "Logger"
+    }
+
+    defines
+    {
+        "__ENABLE_LOGGING",
+        "__LOG_SHOW_LINE"
+    }
+
+    dependson
+    {
+        "Schema",
+        "InstantiateDB"
+    }
+
+project "UpdateDaemon"
+    location "UpdateDaemon"
+    kind "ConsoleApp"
+    language "C++"
+    cppdialect "C++17"
+    systemversion "latest" -- compiler version
+
+    targetdir(targetbuilddir)
+    objdir(intermediatedir)
+    libdirs(sharedbuildlibs)
+
+    files
+    {
+        projectsrc,
+        projectinc
+    }
+
+    includedirs
+    {
+        commoninc,
+        projincpath,
+        dbincdir
+    }
+
+    links
+    {
+        "Logger",
+        "Threads::Threads"
+    }
+
+    defines
+    {
+        "__ENABLE_LOGGING",
+        "__LOG_SHOW_LINE"
+    }
+
+    dependson
+    {
+        "Schema",
+    }
+
 filter "configurations:Debug"
-    defines "_ENABLE_LOGGING"
+    defines "__ENABLE_LOGGING"
     symbols "On"
 
 filter "configurations:Release"
-    defines "_ENABLE_LOGGING"
+    defines "__ENABLE_LOGGING"
     optimize "Speed"
 
 filter "configurations:Performance"

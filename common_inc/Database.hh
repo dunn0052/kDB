@@ -10,6 +10,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+static const std::string DB_EXT = ".db";
+
 struct MappedMemory
 {
     char* p_mapped;
@@ -19,7 +21,7 @@ struct MappedMemory
 class Database
 {
     public:
-        Database();
+        Database(const std::string& file_path);
         ~Database();
 
         template <typename OBJ_TYPE>
@@ -83,8 +85,11 @@ class Database
         template <typename ObjectType>
         RETCODE Subscribe();
 
+    int OpenDatabase(const OBJECT& objectName);
+
     private:
 
-        std::map<OBJECT, MappedMemory> m_ObjectMemMap;
+        std::map<std::string, MappedMemory> m_ObjectMemMap;
+        std::string m_DBFilePath;
         char* GetObjectMem(const OBJECT& databaseName);
 };
