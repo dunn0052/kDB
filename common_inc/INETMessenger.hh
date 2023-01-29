@@ -1,6 +1,7 @@
 #ifndef INETMESSENGER__HH
 #define INETMESSENGER__HH
 
+// Update version for production
 constexpr int _SERVER_VERSION = 1;
 
 #include <retcode.hh>
@@ -31,7 +32,6 @@ struct CONNECTION
 {
     int port;
     char address[INET6_ADDRSTRLEN];
-    int socket;
 
     bool operator == (const CONNECTION& other) const
     {
@@ -54,13 +54,13 @@ namespace std
 
 struct INET_HEADER
 {
-    CONNECTION connection_token;
+    CONNECTION connection;
     size_t message_size;
 };
 
 struct INET_PACKAGE
 {
-    INET_HEADER header; // pointer to header can proxy as pointer to whole INET_PACKAGE
+    INET_HEADER header;
     char payload[0];
 };
 
@@ -82,7 +82,7 @@ static void *get_in_addr(struct sockaddr *sa)
 
 static RETCODE ReceiveAck(int socket, ACKNOWLEDGE& acknowledge)
 {
-    // Timeout at 1 second
+    // Timeout at 1 second to wait for recv
     struct timeval tv;
     tv.tv_sec = 1;
     tv.tv_usec = 0;
@@ -98,11 +98,8 @@ static RETCODE ReceiveAck(int socket, ACKNOWLEDGE& acknowledge)
     if( sizeof(acknowledge) != bytes_received ||
         _SERVER_VERSION != acknowledge.server_version)
     {
-        //std::cout << "Failed to receive ack from socket: " << socket << "\n";
         return RTN_CONNECTION_FAIL;
     }
-
-    //std::cout << "Received ack from socket: " << socket << "\n";
 
     return RTN_OK;
 }
@@ -111,18 +108,16 @@ static RETCODE SendAck(int socket, ACKNOWLEDGE& acknowledge)
 {
     if(-1 == send(socket, static_cast<void*>(&acknowledge), sizeof(acknowledge), 0))
     {
-        //std::cout << "Failed to send ack to socket: " << socket << "\n";
         return RTN_CONNECTION_FAIL;
     }
-
-    //std::cout << "Sent ack to socket: " << socket << "\n";
 
     return RTN_OK;
 }
 
-   typedef void (*ConnectDelegate)(const CONNECTION&);
-   typedef void (*DisconnectDelegate)(const CONNECTION&);
-   typedef void (*MessageDelegate)(const CONNECTION&, const char*);
+typedef void (*ConnectDelegate)(const CONNECTION&);
+typedef void (*DisconnectDelegate)(const CONNECTION&);
+typedef void (*MessageDelegate)(const CONNECTION&, const char*);
+typedef void (*StopDelegate)(void);
 
 // @TODO: Figure out how to pass queue reference rather than pointer
 class PollThread: public DaemonThread<int>
@@ -137,7 +132,7 @@ public:
         {
             INET_PACKAGE* message = reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + package->header.message_size]);
             message->header.message_size = package->header.message_size;
-            message->header.connection_token = iter->first;
+            message->header.connection = iter->first;
             memcpy(message->payload, package->payload, message->header.message_size);
             m_SendQueue.Push(message);
         }
@@ -156,12 +151,12 @@ public:
 
     // Send packed data -- structs without other references
     template<class DATA>
-    RETCODE Send(const DATA& data, size_t connection_token)
+    RETCODE Send(const DATA& data, size_t connection)
     {
         PROFILE_FUNCTION();
         INET_PACKAGE* package = new char[sizeof(DATA) + sizeof(INET_PACKAGE)];
         package->header.message_size = sizeof(DATA);
-        package->header.connection_token = connection_token;
+        package->header.connection = connection;
         memcpy(&(package->payload[0]), *data, sizeof(DATA));
         m_SendQueue.Push(package);
         return RTN_OK;
@@ -437,8 +432,7 @@ public:
             memcpy(conn.address, accepted_address, sizeof(conn.address));
             std::stringstream portstream(port);
             portstream >> conn.port;
-            conn.socket = connectedSocket;
-            AddFDToPoll(connectedSocket, EPOLLIN | EPOLLPRI);
+            AddConnection(connectedSocket, conn, EPOLLIN | EPOLLPRI);
             m_ConnectionMap[conn] = connectedSocket;
             m_FDMap[connectedSocket] = conn;
         }
@@ -482,20 +476,14 @@ public:
         // Need to get connection that matches fd to call disconnect delegate
         if (revents & err_mask)
         {
-            retcode = RemoveFDFromPoll(fd);
-            m_FDMap.erase(fd);
-            m_ConnectionMap.erase(connection);
-            m_OnDisconnect.Invoke(connection);
+            retcode = RemoveConnection(fd, connection);
             return RTN_CONNECTION_FAIL;
         }
 
         recv_ret = recv(fd, &(inet_header), sizeof(INET_HEADER), 0);
         if (recv_ret == 0)
         {
-            RemoveFDFromPoll(fd);
-            m_FDMap.erase(fd);
-            m_ConnectionMap.erase(connection);
-            m_OnDisconnect.Invoke(connection);
+            RemoveConnection(fd, connection);
             return RTN_CONNECTION_FAIL;
         }
 
@@ -509,10 +497,7 @@ public:
 
             /* Error */
             std::cout << "Error receving data from socket: " << fd << "\n";
-            RemoveFDFromPoll(fd);
-            m_FDMap.erase(fd);
-            m_ConnectionMap.erase(connection);
-            m_OnDisconnect.Invoke(connection);
+            RemoveConnection(fd, connection);
             return RTN_CONNECTION_FAIL;
         }
 
@@ -531,10 +516,7 @@ public:
             {
                 /* Error */
                 std::cout << "Error receving data from socket: " << fd << "\n";
-                RemoveFDFromPoll(fd);
-                m_FDMap.erase(fd);
-                m_ConnectionMap.erase(connection);
-                m_OnDisconnect.Invoke(connection);
+                RemoveConnection(fd, connection);
                 return RTN_CONNECTION_FAIL;
             }
 
@@ -555,7 +537,7 @@ public:
 
         while(m_SendQueue.TryPop(packet))
         {
-            std::unordered_map<CONNECTION,int>::iterator connection = m_ConnectionMap.find(packet->header.connection_token);
+            std::unordered_map<CONNECTION,int>::iterator connection = m_ConnectionMap.find(packet->header.connection);
             if(connection != m_ConnectionMap.end())
             {
                 message_length = packet->header.message_size + sizeof(INET_PACKAGE);
@@ -566,7 +548,7 @@ public:
             }
             else
             {
-                std::cout << "Could not find: " << packet->header.connection_token.address << "sending failed!\n";
+                std::cout << "Could not find: " << packet->header.connection.address << "sending failed!\n";
             }
 
             delete packet;
@@ -613,10 +595,8 @@ public:
                     return RTN_FAIL;
                 }
 
-                m_ConnectionMap[connection] = accept_socket;
-                m_FDMap[accept_socket] = connection;
-                AddFDToPoll(accept_socket, EPOLLIN | EPOLLPRI);
-                m_OnClientConnect.Invoke(connection);
+                AddConnection(accept_socket, connection, EPOLLIN | EPOLLPRI);
+
                 return RTN_OK;
             }
             else
@@ -667,6 +647,29 @@ public:
         return RTN_OK;
     }
 
+
+    RETCODE AddConnection(int fd, const CONNECTION& connection, uint32_t events)
+    {
+        RETCODE retcode = AddFDToPoll(fd, events);
+
+        m_ConnectionMap[connection] = fd;
+        m_FDMap[fd] = connection;
+
+        m_OnClientConnect.Invoke(connection);
+
+        return retcode;
+    }
+
+    RETCODE RemoveConnection(int fd, const CONNECTION& connection)
+    {
+        RETCODE retcode = RemoveFDFromPoll(fd);
+        m_FDMap.erase(fd);
+        m_ConnectionMap.erase(connection);
+        m_OnDisconnect.Invoke(connection);
+
+        return retcode;
+    }
+
     RETCODE RemoveFDFromPoll(int fd)
     {
         PROFILE_FUNCTION();
@@ -708,13 +711,36 @@ public:
 
         /* The epoll_create argument is ignored on modern Linux */
         m_PollFD = epoll_create(255);
-        if (m_PollFD < 0) {
+        if (m_PollFD < 0)
+        {
             err = errno;
             std::cout << "Error creating epoll: " << strerror(err) << " \n";
             return RTN_FAIL;
         }
 
         return RTN_OK;
+    }
+
+    RETCODE StopPoll()
+    {
+        RETCODE retcode = RTN_OK;
+        m_SendQueue.done();
+        m_ReceiveQueue.done();
+        Stop();
+
+        for(std::unordered_map<CONNECTION,int>::iterator iter = m_ConnectionMap.begin(); iter != m_ConnectionMap.end(); ++iter)
+        {
+            retcode |= RemoveConnection(iter->second, iter->first);
+        }
+
+        retcode |= RemoveFDFromPoll(m_TCPSocket);
+        m_ConnectionMap.clear();
+        m_FDMap.clear();
+
+        m_OnStop.Invoke();
+
+        return retcode;
+
     }
 
     std::string GetTCPAddress()
@@ -745,391 +771,8 @@ public:
     Hook<ConnectDelegate> m_OnServerConnect;
     Hook<DisconnectDelegate> m_OnDisconnect;
     Hook<MessageDelegate> m_OnReceive;
+    Hook<StopDelegate> m_OnStop;
 };
-
-class INETMessenger
-{
-
-public:
-
-    INETMessenger(const std::string& portNumber = "")
-
-        : m_Ready(false), m_CanAccept(false), m_IsAccepting(false),
-          m_AcceptingPort(portNumber), m_AcceptingAddress(),
-          /*m_PollThread(),*/ m_ListeningSocket(-1),
-          m_ClientQueue(), m_Connections()
-    {
-        SetSignalHandlers(); // maybe..
-
-        if(m_AcceptingPort.empty())
-        {
-            // We only want to receive and that's ok
-            m_CanAccept = false;
-            return;
-        }
-
-        GetConnectionForSelf();
-    }
-
-    ~INETMessenger()
-    {
-
-        StopListeningForAccepts();
-    }
-
-    RETCODE Send(int socket, const char* message, size_t message_length)
-    {
-        while(message_length > 0)
-        {
-            message_length -= send(socket, message, message_length, 0);
-        }
-
-        return RTN_OK;
-    }
-
-    RETCODE SendToAll(const std::string& message)
-    {
-        RETCODE retcode = RTN_OK;
-        for(CONNECTION& connection : m_Connections)
-        {
-            //std::cout << "\nSending to: " << connection.address << " on port: " << connection.socket << "\n";
-            //retcode |= Send(connection.socket, message.c_str(), message.length());
-        }
-
-        return retcode;
-    }
-
-    RETCODE SendToAll(char* buffer, size_t buffer_size)
-    {
-        RETCODE retcode = RTN_OK;
-        for(CONNECTION& connection : m_Connections)
-        {
-            //retcode |= Send(connection.socket, buffer, buffer_size);
-        }
-
-        return retcode;
-    }
-
-    RETCODE Receive(char buffer[], int buffer_length)
-    {
-        //return Receive(m_Connections[0].socket, buffer, buffer_length);
-        return RTN_OK;
-    }
-
-    RETCODE Receive(int socket, char buffer[], int buffer_length)
-    {
-        int bytes_received = recv(socket, buffer, buffer_length, 0);
-
-        if(0 == bytes_received)
-        {
-            return RTN_CONNECTION_FAIL;
-        }
-        else if(-1 == bytes_received)
-        {
-            return RTN_FAIL;
-        }
-
-        return RTN_OK;
-    }
-
-    RETCODE Listen(int listenQueueSize = 10)
-    {
-        if(m_CanAccept)
-        {
-            // Start listening for connections
-            if(-1 == listen(m_ListeningSocket, listenQueueSize))
-            {
-                return RTN_CONNECTION_FAIL;
-            }
-
-            //m_PollThread.Start();
-
-            m_IsAccepting = true;
-
-            return RTN_OK;
-        }
-
-        return RTN_FAIL;
-    }
-
-
-
-    RETCODE GetAcceptedConnections()
-    {
-        RETCODE retcode = RTN_OK;
-        while(!m_ClientQueue.empty())
-        {
-            CONNECTION& accept_connection = m_ClientQueue.front();
-            //fcntl(accept_connection.socket, F_SETFL, O_NONBLOCK);
-            m_Connections.push_back(accept_connection);
-            //std::cout << "New socket ready: " << accept_connection.socket << "\n";
-            m_ClientQueue.pop();
-
-        }
-
-        return retcode;
-    }
-
-    RETCODE CloseAllConnections()
-    {
-        // Get every connection waiting to be accepted
-        RETCODE retcode = GetAcceptedConnections();
-
-        // Close them all
-        for(CONNECTION& connection : m_Connections)
-        {
-            //close(connection.socket);
-            //std::cout << "Closed address: "<< connection.address << " socket: " << connection.socket << "\n";
-        }
-
-        m_Connections.clear();
-
-        return retcode;
-    }
-
-    RETCODE StopListeningForAccepts()
-    {
-        if(m_IsAccepting)
-        {
-            m_IsAccepting = false;
-            //m_PollThread.Stop();
-            close(m_ListeningSocket);
-            // Maybe make closing everything optional..
-            return CloseAllConnections();
-        }
-
-        return RTN_OK;
-    }
-
-    RETCODE GetConnectionForSelf(void)
-    {
-        struct addrinfo hints = {0};
-        struct addrinfo *returnedAddrInfo = nullptr;
-        struct addrinfo *currentAddrInfo = nullptr;
-        int getInfoStatus = 0;
-        int yes = 1;
-        // Set how we want the results to come as
-        memset(&hints, 0, sizeof(hints));
-        hints.ai_family = AF_UNSPEC; // IPV4 or IPV6
-        hints.ai_socktype = SOCK_STREAM; // slower, yet reliable
-        hints.ai_flags = AI_PASSIVE; // fill in IP for me
-
-        // Get address for self
-        if((getInfoStatus = getaddrinfo(nullptr, m_AcceptingPort.c_str(), &hints, &returnedAddrInfo)) != 0)
-        {
-            fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(getInfoStatus));
-            m_CanAccept = false;
-            return RTN_NOT_FOUND;
-        }
-        else
-        {
-            char accepted_address[INET6_ADDRSTRLEN];
-
-            // Get llist of connections
-            inet_ntop(returnedAddrInfo->ai_addr->sa_family,
-                      get_in_addr((struct sockaddr *)&returnedAddrInfo),
-                      accepted_address,
-                      sizeof(accepted_address));
-
-            m_AcceptingAddress = accepted_address;
-        }
-
-        // Find connection address for us
-        for(currentAddrInfo = returnedAddrInfo; currentAddrInfo != NULL; currentAddrInfo = currentAddrInfo->ai_next)
-        {
-
-            if ((m_ListeningSocket = socket(currentAddrInfo->ai_family, currentAddrInfo->ai_socktype,
-                    currentAddrInfo->ai_protocol)) == -1)
-            {
-                perror("server: socket");
-                continue;
-            }
-
-            if (setsockopt(m_ListeningSocket, SOL_SOCKET, SO_REUSEADDR, &yes,
-                    sizeof(int)) == -1)
-            {
-                m_CanAccept = false;
-                return RTN_CONNECTION_FAIL;
-            }
-
-
-            // We got one, so bind!
-            if (bind(m_ListeningSocket, currentAddrInfo->ai_addr, currentAddrInfo->ai_addrlen) == -1)
-            {
-                close(m_ListeningSocket);
-                perror("server: bind");
-                continue;
-            }
-
-            break;
-        }
-
-        // Cleanup
-        freeaddrinfo(returnedAddrInfo);
-        if(nullptr == currentAddrInfo)
-        {
-            m_CanAccept = false;
-            return RTN_MALLOC_FAIL;
-        }
-
-        // Ignore broken pipe signal to prevent send/read from causing errors
-        sigignore(SIGPIPE);
-
-        m_CanAccept = true;
-
-        return RTN_OK;
-    }
-
-    RETCODE Connect(const std::string& address, const std::string& port)
-    {
-        struct addrinfo hints = {0};
-        struct addrinfo *returnedAddrInfo = nullptr;
-        struct addrinfo *currentAddrInfo = nullptr;
-        int rv = -1;
-        int connectedSocket = -1;
-
-        memset(&hints, 0, sizeof(hints));
-        hints.ai_family = AF_UNSPEC;
-        hints.ai_socktype = SOCK_STREAM;
-        hints.ai_flags = AI_PASSIVE;
-
-        if ((rv = getaddrinfo(address.c_str(), port.c_str(), &hints, &returnedAddrInfo)) != 0)
-        {
-            fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
-            return RTN_NOT_FOUND;
-        }
-
-        // loop through all the results and connect to the first good one
-        for(currentAddrInfo = returnedAddrInfo;
-            currentAddrInfo != NULL;
-            currentAddrInfo = currentAddrInfo->ai_next)
-        {
-            if ((connectedSocket =
-                 socket(currentAddrInfo->ai_family,
-                 currentAddrInfo->ai_socktype,
-                 currentAddrInfo->ai_protocol)) == -1)
-            {
-                perror("client: socket");
-                continue;
-            }
-
-            // Send initial connection
-            if (connect(connectedSocket,
-                        currentAddrInfo->ai_addr,
-                        currentAddrInfo->ai_addrlen) == -1)
-            {
-                close(connectedSocket);
-                perror("client: connect");
-                continue;
-            }
-
-            break;
-        }
-
-        if (currentAddrInfo == NULL)
-        {
-            return RTN_CONNECTION_FAIL;
-        }
-
-        char accepted_address[INET6_ADDRSTRLEN];
-
-        inet_ntop(returnedAddrInfo->ai_addr->sa_family,
-                    get_in_addr((struct sockaddr *)&returnedAddrInfo),
-                    accepted_address,
-                    sizeof(accepted_address));
-
-        freeaddrinfo(returnedAddrInfo);
-
-        CONNECTION connection{0, '\0'};
-
-        // Send our server version to server to match
-        RETCODE retcode = RTN_OK;//SendAck(connectedSocket, ack);
-        if(RTN_OK == retcode)
-        {
-            //connection.socket = connectedSocket;
-            memcpy(connection.address, accepted_address, sizeof(connection.address));
-            m_Connections.push_back(connection);
-        }
-        else
-        {
-            std::cout
-                << "Failed sending acknowledgement to server: "
-                << address
-                << " on port: "
-                << port
-                << "\n";
-        }
-
-        return retcode;
-    }
-
-    inline std::string GetAddress(void)
-    {
-        if(m_CanAccept)
-        {
-            return m_AcceptingAddress;
-        }
-
-        return "NO ACCEPT ADDRESS";
-    }
-
-    inline std::string GetPort(void)
-    {
-        if(m_CanAccept)
-        {
-            return m_AcceptingPort;
-        }
-
-        return "NO ACCEPT PORT";
-    }
-
-    inline std::string GetConnectedAddress(size_t index = 0)
-    {
-        if(index < m_Connections.size())
-        {
-            return m_Connections[index].address;
-        }
-
-        return "NO CONNECT ADDRESS";
-    }
-
-    inline int GetConnectionSocket(size_t index = 0)
-    {
-        return 0;
-    }
-
-    inline bool IsListening(void)
-    {
-        return m_IsAccepting;
-    }
-
-private:
-
-    static void HandleSignal(int sig)
-    {
-        std::cout << "\nHandled signal: " << sig << "\n";
-        exit(1);
-    }
-
-    void SetSignalHandlers(void)
-    {
-        signal(SIGINT, HandleSignal);
-        signal(SIGQUIT, HandleSignal);
-    }
-
-    bool m_Ready;
-    bool m_CanAccept;
-    bool m_IsAccepting;
-    std::string m_AcceptingPort;
-    std::string m_AcceptingAddress;
-    //PollThread m_PollThread;
-    int m_ListeningSocket;
-    int m_PollFD;
-    std::queue<CONNECTION> m_ClientQueue;
-public:
-    std::vector<CONNECTION> m_Connections;
-};
-
 
 
 #endif

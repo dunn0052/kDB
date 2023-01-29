@@ -36,6 +36,7 @@ int main(int argc, char* argv[])
 
     RETCODE parseRetcode = parse.ParseCommandLineArguments(argc, argv);
 
+#if 0
     if(RTN_OK == parseRetcode)
     {
         INETMessenger comms(portArg.GetValue());
@@ -54,6 +55,6 @@ int main(int argc, char* argv[])
         return RTN_OK;
     }
 
-
+#endif
     return RTN_FAIL;
 }

@@ -3,29 +3,38 @@
 #include <Logger.hh>
 #include <unistd.h>
 
-// prototypes
-static RETCODE StartListening(const std::string& connectionAddress, const std::string& connectionPort);
+
+static bool g_process_is_running = true;
+
+static void quit_signal(int sig)
+{
+    g_process_is_running = false;
+}
 
 int main(int argc, char* argv[])
 {
+    signal(SIGQUIT, quit_signal);
+    signal(SIGINT, quit_signal);
     CLI::Parser parse("UpdateDaemon", "Manages reading and writing of DBs");
     CLI::CLI_OBJECTArgument objectArg("--object", "Object to monitor", true);
     CLI::CLI_IntArgument threadNumArg("-t", "Number of threads", true);
     CLI::CLI_IntArgument sleepArg("-s", "Time to sleep", true);
-    CLI::CLI_StringArgument conenctionAddressArg("-c", "Connection address for DBUpdate", true);
-    CLI::CLI_StringArgument connectionPortArg("-p", "Connection port for DBUpdate", true);
+    CLI::CLI_StringArgument portArg("-p", "Connection port for DBUpdate", true);
+    CLI::CLI_FlagArgument helpArg("-h", "Shows usage", false);
+
 
 
     parse.AddArg(objectArg)
         .AddArg(threadNumArg)
         .AddArg(sleepArg)
-        //.AddArg(conenctionAddressArg)
-        .AddArg(connectionPortArg);
+        .AddArg(portArg)
+        .AddArg(helpArg);
 
     RETCODE retcode = parse.ParseCommandLineArguments(argc, argv);
 
-    if(RTN_OK != retcode)
+    if(RTN_OK != retcode || helpArg.IsInUse())
     {
+        parse.Usage();
         return retcode;
     }
 
@@ -53,8 +62,8 @@ int main(int argc, char* argv[])
     }
 
     // Will have to change this to DOFRI??
-    TasQ<BASS> outgoing_changes;
-    TasQ<BASS> incoming_changes;
+    TasQ<char*> outgoing_changes;
+    TasQ<char*> incoming_changes;
 
     for(MonitorThread* monitor: monitor_threads)
     {
@@ -62,37 +71,14 @@ int main(int argc, char* argv[])
         chunk_start += chunk_range;
     }
 
-    // Setup read/write connection
-    INETMessenger connection(connectionPortArg.GetValue());
-    LOG_INFO("Accepting on %s:%s", connection.GetConnectedAddress().c_str(), connection.GetPort().c_str());
-    retcode = connection.Listen();
+    PollThread connection(portArg.GetValue());
 
     size_t sleep_time = sleepArg.IsInUse() ? sleepArg.GetValue() : 10;
 
     std::chrono::time_point start = std::chrono::steady_clock::now();
-    char buffer[sizeof(BASS)];
-    BASS obj;
-    while(true)
-    {
-        // Send any updates to users
-        connection.GetAcceptedConnections();
-        #if 0
-        while(outgoing_changes.TryPop(obj))
-        {
-            memcpy(buffer, &obj, sizeof(BASS));
-            connection.SendToAll(buffer, sizeof(BASS));
-        }
-        #endif
-        for(CONNECTION& conn: connection.m_Connections)
-        {
-            retcode = connection.Receive(conn.socket, buffer, sizeof(BASS));
-            if(RTN_OK != retcode)
-            {
-                continue;
-            }
 
-            //incoming_changes.Push(*reinterpret_cast<BASS*>(buffer));
-        }
+    while(g_process_is_running)
+    {
 
         if(std::chrono::steady_clock::now() - start > std::chrono::seconds(sleep_time))
             break;
@@ -108,42 +94,4 @@ int main(int argc, char* argv[])
     }
 
     LOG_INFO("Completed %lld record updates in %u second(s)", total_recs, sleep_time);
-}
-
-static RETCODE StartListening(const std::string& connectionAddress, const std::string& connectionPort)
-{
-    INETMessenger connection(std::move(connectionPort));
-    //RETCODE retcode = connection.Connect(connectionAddress, connectionPort);
-    LOG_INFO("Accepting on %s:%s", connection.GetConnectedAddress().c_str(), connection.GetPort().c_str());
-    RETCODE retcode = connection.Listen();
-
-# if 0
-    if(RTN_OK == retcode)
-    {
-        LOG_INFO("Connected to %s:%s with socket %d", connection.GetConnectedAddress().c_str(), connectionPort.c_str(), connection.GetConnectionSocket());
-        char buffer[1000];
-        bool connected = true;
-        while(connected)
-        {
-            retcode = connection.Receive(connection.GetConnectionSocket(), buffer, 999);
-            if(RTN_OK != retcode)
-            {
-                LOG_WARN("Connection closed!");
-                connected = false;
-                continue;
-            }
-            buffer[1000] = '\0';
-            LOG_INFO("%s", buffer);
-            memset(buffer, 0, sizeof(buffer));
-            usleep(100);
-        }
-
-        LOG_INFO("Done listening!\n");
-    }
-    else
-    {
-        LOG_WARN("Could not connect to %s:%s", connectionAddress.c_str(), connectionPort.c_str());
-    }
-#endif
-    return retcode;
 }
