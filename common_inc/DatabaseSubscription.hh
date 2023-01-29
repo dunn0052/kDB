@@ -15,23 +15,24 @@ public:
     {
         if(!DatabaseSubscription::s_DatabaseConnection.IsListening())
         {
-            s_DatabaseConnection.Connect("127.0.0.1", "5000");
+            //s_DatabaseConnection.Connect("127.0.0.1", "5000");
         }
     }
 
     void Update()
     {
-        s_DatabaseConnection.Receive(m_LocalObject, sizeof(OBJECT));
+        //s_DatabaseConnection.Receive(m_LocalObject, sizeof(OBJECT));
     }
 
     RETCODE Set(OBJECT updated_object)
     {
-        return s_DatabaseConnection.Send(&updated_object);
+        //return s_DatabaseConnection.Send(&updated_object);
+        return RTN_FAIL;
     }
 
 private:
 
-        static INETMessenger s_DatabaseConnection;
+        //static INETMessenger s_DatabaseConnection;
         char m_LocalObject[sizeof(OBJECT)] = '\0';
 
         // C++17 Only feature. Otherwise define in separate .cpp file

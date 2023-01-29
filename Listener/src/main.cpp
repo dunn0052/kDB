@@ -10,8 +10,12 @@ static bool running = true;
 static void quit_signal(int sig)
 {
     LOG_INFO("Signal %d caught!", sig);
-    LOG_INFO("Ending Listener");
     running = false;
+}
+
+static void StopListening(void)
+{
+    LOG_INFO("Stopping Listener");
 }
 
 void PrintClientConnect(const CONNECTION& connection)
@@ -114,6 +118,7 @@ int main(int argc, char* argv[])
         connection.m_OnServerConnect += PrintServerConnect;
         connection.m_OnDisconnect += PrintDisconnect;
         connection.m_OnReceive += PrintMessage;
+        connection.m_OnStop += StopListening;
 
         TasQ<INET_PACKAGE*> messages;
         WriteThread* writer_thread = new WriteThread();
@@ -128,12 +133,13 @@ int main(int argc, char* argv[])
             {
                 while(messages.TryPop(message))
                 {
-                    //strncpy(message->header.connection_token.address, connectionAddressArg.GetValue().c_str(), sizeof(message->header.connection_token.address));
                     connection.SendAll(message);
                 }
 
                 usleep(100);
             }
+
+            connection.StopPoll();
 
             LOG_INFO("Done listening!\n");
         }

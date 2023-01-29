@@ -104,11 +104,11 @@ void PrintDBObject(const OBJECT_SCHEMA& object, char* p_object, RECORD rec_num)
     std::cout << "\n";
 }
 
-class MonitorThread: public DaemonThread<const OBJECT&, RECORD, RECORD, TasQ<BASS>*, TasQ<BASS>*>
+class MonitorThread: public DaemonThread<const OBJECT&, RECORD, RECORD, TasQ<char*>*, TasQ<char*>*>
 {
 
 public:
-    void execute(const OBJECT& objectName, RECORD min_record, RECORD max_record, TasQ<BASS>* outgoing_objects, TasQ<BASS>* incoming_objects)
+    void execute(const OBJECT& objectName, RECORD min_record, RECORD max_record, TasQ<char*>* outgoing_objects, TasQ<char*>* incoming_objects)
     {
         std::stringstream thread_write_stream;
         thread_write_stream << "Range: " << min_record << " -> " << max_record << "\n";
@@ -162,14 +162,16 @@ public:
                     m_TotalRecs++;
                     #endif
                     // Testing writing all changes to just first object in the 8
+                    #if 0
                     while(incoming_objects->TryPop(copy))
                     {
                         LOG_INFO("MODIFY: %c %c %c %c", copy.E, copy.A, copy.D, copy.G);
                         m_WroteRecs++;
                     }
+                    #endif
                 }
 
-                outgoing_objects->TryPush(copy);
+                //outgoing_objects->TryPush(copy);
 
                 for(char index = 0; index < 8; index++)
                 {
