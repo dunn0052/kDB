@@ -5,7 +5,7 @@
 constexpr int _SERVER_VERSION = 1;
 
 #include <retcode.hh>
-#include <DOFRI.hh>
+#include <OFRI.hh>
 #include <DaemonThread.hh>
 #include <TasQ.hh>
 #include <Hook.hh>
@@ -56,6 +56,7 @@ struct INET_HEADER
 {
     CONNECTION connection;
     size_t message_size;
+    size_t data_type;
 };
 
 struct INET_PACKAGE
@@ -116,7 +117,7 @@ static RETCODE SendAck(int socket, ACKNOWLEDGE& acknowledge)
 
 typedef void (*ConnectDelegate)(const CONNECTION&);
 typedef void (*DisconnectDelegate)(const CONNECTION&);
-typedef void (*MessageDelegate)(const CONNECTION&, const char*);
+typedef void (*MessageDelegate)(const INET_PACKAGE*);
 typedef void (*StopDelegate)(void);
 
 // @TODO: Figure out how to pass queue reference rather than pointer
@@ -502,9 +503,10 @@ public:
         }
 
         int remaining_message = inet_header.message_size;
-        payload = new char[remaining_message];
+        INET_PACKAGE* package = reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + remaining_message]);
+        memcpy(&(package->header), &inet_header, sizeof(INET_HEADER));
 
-        while(0 < (recv_ret = recv(fd, (payload + inet_header.message_size - remaining_message), remaining_message, 0)))
+        while(0 < (recv_ret = recv(fd, package->payload + inet_header.message_size - remaining_message, remaining_message, 0)))
         {
             remaining_message -= recv_ret;
         }
@@ -523,8 +525,8 @@ public:
         }
 
 
-        m_OnReceive.Invoke(connection, payload);
-        delete[] payload;
+        m_OnReceive.Invoke(package);
+        delete[] package;
         return RTN_OK;
     }
 

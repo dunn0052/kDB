@@ -1,4 +1,4 @@
-#include <DOFRI.hh>
+#include <OFRI.hh>
 #include <retcode.hh>
 #include <demangler.hh>
 

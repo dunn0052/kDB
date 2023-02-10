@@ -2,7 +2,7 @@
 #define SCHEMA__HH
 
 #include <CLI.hh>
-#include <DOFRI.hh>
+#include <OFRI.hh>
 #include <retcode.hh>
 
 #include <vector>

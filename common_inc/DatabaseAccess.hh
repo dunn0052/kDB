@@ -28,6 +28,29 @@ class DatabaseAccess
             }
         }
 
+        DatabaseAccess(DatabaseAccess&& other)
+            : m_DBAddress(std::move(other.m_DBAddress)),
+              m_Size(std::move(other.m_Size)),
+              m_ObjectName(std::move(other.m_ObjectName)),
+              m_Object(std::move(other.m_Object)),
+              m_IsOpen(std::move(other.m_IsOpen))
+        {
+            Open();
+        }
+
+        DatabaseAccess& operator=(DatabaseAccess&& other)
+        {
+            m_DBAddress = std::move(other.m_DBAddress);
+            m_Size = std::move(other.m_Size);
+            m_ObjectName = std::move(other.m_ObjectName);
+            m_Object = std::move(other.m_Object);
+            m_IsOpen = std::move(other.m_IsOpen);
+
+            Open();
+
+            return *this;
+        }
+
         ~DatabaseAccess()
         {
             Close();
@@ -47,13 +70,13 @@ class DatabaseAccess
             return nullptr;
         }
 
-        char* Get(const DOFRI& dofri)
+        char* Get(const OFRI& ofri)
         {
             if(m_IsOpen && nullptr != m_DBAddress)
             {
-                size_t byte_index = (m_Object.objectSize * dofri.r) +
-                    m_Object.fields[dofri.f].fieldOffset +
-                    (m_Object.fields[dofri.f].fieldSize * dofri.i);
+                size_t byte_index = (m_Object.objectSize * ofri.r) +
+                    m_Object.fields[ofri.f].fieldOffset +
+                    (m_Object.fields[ofri.f].fieldSize * ofri.i);
                 if( m_Size > byte_index )
                 {
                     return m_DBAddress + byte_index;
@@ -63,22 +86,20 @@ class DatabaseAccess
             return nullptr;
         }
 
-        RETCODE WriteValue(const DOFRI& dofri, const std::string& value)
+        RETCODE WriteValue(const OFRI& ofri, const std::string& value)
         {
             RETCODE retcode = RTN_OK;
-            void* p_value = Get(dofri);
+            void* p_value = Get(ofri);
             if(nullptr == p_value)
             {
                 return RTN_NULL_OBJ;
             }
 
-            size_t field_value = dofri.f - 1; // DB off by 1
-
-            switch(m_Object.fields[field_value].fieldType)
+            switch(m_Object.fields[ofri.f].fieldType)
             {
                 case 'D': // Databse innacurate because its a string alias
                 {
-                    if(value.size() > m_Object.fields[field_value].numElements)
+                    if(value.size() > m_Object.fields[ofri.f].numElements)
                     {
                         return RTN_BAD_ARG;
                     }
@@ -89,7 +110,7 @@ class DatabaseAccess
                 }
                 case 'O': // Object
                 {
-                    if(value.size() > m_Object.fields[field_value].numElements)
+                    if(value.size() > m_Object.fields[ofri.f].numElements)
                     {
                         return RTN_BAD_ARG;
                     }
@@ -101,7 +122,7 @@ class DatabaseAccess
                 case 'C': // Char
                 case 'Y': // Unsigned char (byte)
                 {
-                    if(value.size() > m_Object.fields[field_value].numElements)
+                    if(value.size() > m_Object.fields[ofri.f].numElements)
                     {
                         return RTN_BAD_ARG;
                     }
@@ -128,7 +149,7 @@ class DatabaseAccess
                     size_t int_val = static_cast<size_t>(atol(value.c_str()));
                     if(0 == int_val and "0" != value.c_str())
                     {
-                        retcode |= RTN_BAD_ARG;
+                        return RTN_BAD_ARG;
                     }
                     *static_cast<size_t*>(p_value) = int_val;
                     break;
@@ -141,9 +162,17 @@ class DatabaseAccess
                     if("FALSE" == value_buffer.str() or
                         "0" == value_buffer.str())
                     {
-                        bool_val = false;
+                        *static_cast<bool*>(p_value) = false;
                     }
-                    *static_cast<bool*>(p_value) = bool_val;
+                    else if("TRUE" != value_buffer.str() or
+                        "1" != value_buffer.str())
+                    {
+                        *static_cast<bool*>(p_value) = true;
+                    }
+                    else
+                    {
+                        return RTN_BAD_ARG;
+                    }
                     break;
                 }
                 default:
@@ -155,23 +184,17 @@ class DatabaseAccess
             return RTN_OK;
         }
 
-        RETCODE ReadValue(const DOFRI& dofri, std::string& value)
+        RETCODE ReadValue(const OFRI& ofri, std::string& value)
         {
-            void* p_value = Get(dofri);
+            void* p_value = Get(ofri);
             if(nullptr == p_value)
             {
                 return RTN_NULL_OBJ;
             }
 
             std::stringstream db_value;
-            size_t field_value = dofri.f - 1; // DB off by 1
-            switch(m_Object.fields[field_value].fieldType)
+            switch(m_Object.fields[ofri.f].fieldType)
             {
-                case 'D': // Databse innacurate because its a string alias
-                {
-                    db_value << *static_cast<DATABASE*>(p_value);
-                    break;
-                }
                 case 'O': // Object
                 {
                     db_value << *static_cast<OBJECT*>(p_value);
@@ -181,7 +204,7 @@ class DatabaseAccess
                 case 'Y': // Unsigned char (byte)
                 {
                     db_value.rdbuf()->sputn(reinterpret_cast<char*>(p_value),
-                        sizeof(char) * m_Object.fields[field_value].numElements);
+                        sizeof(char) * m_Object.fields[ofri.f].numElements);
                     break;
                 }
                 case 'N': // signed integer
@@ -211,6 +234,11 @@ class DatabaseAccess
             value = db_value.str();
             return RTN_OK;
         }
+
+    inline bool IsValid()
+    {
+        return m_IsOpen;
+    }
 
     private:
 

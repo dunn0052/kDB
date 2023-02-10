@@ -50,7 +50,7 @@ static RETCODE GenerateObjectHeader(OBJECT_SCHEMA& object, std::ofstream& header
     /* Header guard */
     headerFile << "#ifndef " << std::uppercase << object.objectName << "__HH";
     headerFile << "\n#define " << std::uppercase << object.objectName << "__HH";
-    headerFile << "\n\n#include <DOFRI.hh>\n#include <ObjectSchema.hh>\n"; // maybe..
+    headerFile << "\n\n#include <OFRI.hh>\n#include <ObjectSchema.hh>\n"; // maybe..
 
     headerFile
         << "\nstruct "
@@ -71,11 +71,6 @@ static bool TryGenerateDataType(FIELD_SCHEMA& field, std::string& dataType)
     // Sizings are not accurate because of struct padding
     switch(field.fieldType)
     {
-        case 'D': // Databse innacurate because its a string alias
-        {
-            dataType = "DATABASE";
-            break;
-        }
         case 'O': // Object
         {
             dataType = "OBJECT";
@@ -135,11 +130,6 @@ static bool TrySetFieldSize(FIELD_SCHEMA& field)
     // Sizings are not accurate because of struct padding
     switch(field.fieldType)
     {
-        case 'D': // Databse innacurate because its a string alias
-        {
-            field.fieldSize = sizeof(DATABASE);
-            break;
-        }
         case 'O': // Object
         {
             field.fieldSize = sizeof(OBJECT);
