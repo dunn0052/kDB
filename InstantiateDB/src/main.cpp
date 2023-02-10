@@ -1,5 +1,5 @@
 #include <CLI.hh>
-#include <DOFRI.hh>
+#include <OFRI.hh>
 #include <DBMap.hh>
 #include <Constants.hh>
 #include <fcntl.h>

@@ -2,7 +2,7 @@
 #define __DB_SIZER_HH
 
 #include <retcode.hh>
-#include <DOFRI.hh>
+#include <OFRI.hh>
 #include <allDBs.hh>
 #include <map>
 

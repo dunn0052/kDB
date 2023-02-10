@@ -8,7 +8,7 @@
 #include <iostream>
 #include <Logger.hh>
 #include <retcode.hh>
-#include <DOFRI.hh>
+#include <OFRI.hh>
 
 namespace CLI
 {

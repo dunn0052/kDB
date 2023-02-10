@@ -33,9 +33,9 @@ void PrintDisconnect(const CONNECTION& connection)
     LOG_INFO("Connection disconnected %s:%d", connection.address, connection.port);
 }
 
-void PrintMessage(const CONNECTION& connection, const char* message)
+void PrintMessage(const INET_PACKAGE* package)
 {
-    LOG_INFO("Connection %s:%d send a message: %s", connection.address, connection.port, message);
+    LOG_INFO("Connection %s:%d send a message: %s", package->header.connection.address, package->header.connection.port, package->payload);
 }
 
 class WriteThread: public DaemonThread<TasQ<INET_PACKAGE*>*>
@@ -43,16 +43,42 @@ class WriteThread: public DaemonThread<TasQ<INET_PACKAGE*>*>
     void execute(TasQ<INET_PACKAGE*>* p_queue)
     {
         std::string user_input;
+        INET_PACKAGE* message = nullptr;
         RETCODE retcode = RTN_OK;
 
         TasQ<INET_PACKAGE*>& messages = *p_queue;
 
         while(StopRequested() == false)
         {
-            std::cin >> user_input;
-            INET_PACKAGE* message = reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + user_input.length() + 1]);
-            message->header.message_size = user_input.length() + 1;
-            strncpy(message->payload, user_input.c_str(), user_input.length() + 1);
+            std::getline(std::cin, user_input);
+
+            if(user_input.rfind("ofri", 0) == 0)
+            {
+                std::cout << "Enter ofri: \n";
+                std::getline(std::cin, user_input);
+                std::stringstream ofri_input;
+                ofri_input << user_input;
+
+                LOG_INFO("OFRI: %s", ofri_input.str().c_str());
+                OFRI ofri = {0};
+                if(ofri_input >> ofri.o >> ofri.r >> ofri.f >> ofri.i)
+                {
+                    message = reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + sizeof(OFRI)]);
+                    message->header.message_size = sizeof(OFRI);
+                    memcpy(message->payload, &ofri, sizeof(OFRI));
+                }
+                else
+                {
+                    LOG_WARN("Failed to read ofri: %s", user_input.c_str());
+                    continue;
+                }
+            }
+            else
+            {
+                message = reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + user_input.length() + 1]);
+                message->header.message_size = user_input.length() + 1;
+                strncpy(message->payload, user_input.c_str(), user_input.length() + 1);
+            }
             messages.Push(message);
         }
     }
