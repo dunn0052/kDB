@@ -2,16 +2,17 @@ workspace "DB"
 
     require "cmake" -- needed for cmake extension
 
+    --[[
     platforms
     {
-        "rpi" -- Needed for arm64 architecture
-        --[[
+        "rpi", -- Needed for arm64 architecture
+        
         "Linux",
         "Windows",
         "MacOS"
-        ]]
     }
-
+    ]]
+    
     configurations
     {
         "Debug", -- no opt w/ logging
@@ -130,7 +131,8 @@ project "Schema"
     defines
     {
         "__ENABLE_LOGGING",
-        "__LOG_SHOW_LINE"
+        "__LOG_COLORS"
+        --"__LOG_SHOW_LINE"
     }
 
     postbuildcommands

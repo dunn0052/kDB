@@ -9,6 +9,7 @@
 #include <fstream>
 #include <sstream>
 #include <ObjectSchema.hh>
+#include <Logger.hh>
 
 RETCODE GenerateObjectDBFiles(const OBJECT& objectName,
     const std::string& skm_path,

@@ -55,13 +55,11 @@ int main(int argc, char* argv[])
             retcode |= UpdateDBValue(ofri, valueArg.GetValue());
             if(IS_RETCODE_OK(retcode))
             {
-                LOG_INFO("Updated %s.%u.%u.%u = %s",
-                    ofri.o, ofri.f, ofri.r, ofri.i, valueArg.GetValue().c_str());
+                LOG_INFO("Updated ",ofri.o, ".", ofri.f, ".", ofri.r, ".", ofri.i, " = ", valueArg.GetValue());
             }
             else
             {
-                LOG_WARN("Failed to update %s.%u.%u.%u with %s",
-                    ofri.o, ofri.f, ofri.r, ofri.i, valueArg.GetValue().c_str());
+                LOG_INFO("Failed to update ",ofri.o, ".", ofri.f, ".", ofri.r, ".", ofri.i, " with ", valueArg.GetValue());
             }
         }
         else
@@ -70,13 +68,11 @@ int main(int argc, char* argv[])
             retcode |= ReadDBValue(ofri, value);
             if(IS_RETCODE_OK(retcode))
             {
-                LOG_INFO("Value of %s.%u.%u.%u = %s",
-                    ofri.o, ofri.f, ofri.r, ofri.i, value.c_str());
+                LOG_INFO("Value of ",ofri.o, ".", ofri.f, ".", ofri.r, ".", ofri.i, " = ", value);
             }
             else
             {
-                LOG_WARN("Failed to read %s.%u.%u.%u",
-                    ofri.o, ofri.f, ofri.r, ofri.i);
+                LOG_INFO("Failed to read ",ofri.o, ".", ofri.f, ".", ofri.r, ".", ofri.i);
             }
         }
     }

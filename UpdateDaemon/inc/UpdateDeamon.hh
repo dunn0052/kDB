@@ -118,20 +118,20 @@ public:
                 LOG_INFO("Monitor thread received message");
                 OFRI ofri = {0};
                 memcpy(&ofri, incoming_request->payload, sizeof(OFRI));
-                LOG_INFO("GOT OFRI: %s.%d.%d.%d", ofri.o, ofri.f, ofri.r, ofri.i);
+                LOG_INFO("GOT OFRI: ", ofri.o, ".", ofri.f, ".", ofri.r, ".", ofri.i);
 
 
                 OBJECT_SCHEMA object_info;
                 if(RTN_OK != TryGetObjectInfo(std::string(ofri.o), object_info))
                 {
-                    LOG_WARN("Could not find object: %s", ofri.o);
+                    LOG_WARN("Could not find object: ", ofri.o);
                     continue;
                 }
 
                 // Try and get DB access otherwise fail
                 if(m_MonitoredObjects.find(ofri.o) == m_MonitoredObjects.end())
                 {
-                    LOG_DEBUG("Did not find object %s. Adding to monitored objects", ofri.o);
+                    LOG_DEBUG("Did not find object ", ofri.o, ". Adding to monitored objects");
 
                     DatabaseAccess db_access = DatabaseAccess(ofri.o);
                     if(db_access.IsValid())
@@ -140,7 +140,7 @@ public:
                     }
                     else
                     {
-                        LOG_WARN("Could not open object: %s", ofri.o);
+                        LOG_WARN("Could not open object: ", ofri.o);
                         continue;
                     }
                 }
