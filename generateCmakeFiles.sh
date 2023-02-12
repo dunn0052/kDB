@@ -1,8 +1,8 @@
 #! /usr/bin/bash
 
-export KDB_INSTALL_DIR=$PWD/
+source environment/.kdb_env
 
-./vendor/premake/rpi/premake5 --scripts=./vendor/premake/cmake/ cmake
+./vendor/premake/Linux/premake5 --scripts=./vendor/premake/cmake/ cmake
 
 if [ $# -eq 0 ]
   then

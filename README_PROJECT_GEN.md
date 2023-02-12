@@ -1,6 +1,8 @@
 HOW TO GENERATE PROJECT FILES
 
-    1. Run the apropriate generate* script for whatever you are using
+    1. Source the generateCmakeFiles.sh script like so:
+       . ./generateCmakeFiles.sh
+    2. Optionally add a -d to generate debug files
 
 EXPANDING PREMAKE
 
