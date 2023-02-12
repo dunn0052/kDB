@@ -41,10 +41,6 @@ namespace Log
     {
 
     public:
-        static Logger& Instance(void);
-
-        // printf() style log
-        void Log(LogLevel level, const char* debugLevel, const char* fileName, int lineNum, const char* format, ...);
         
         template<typename Stream, typename... RestOfArgs>
         Stream & Log(Stream& stream, LogLevel level, const char* debugLevel, const char* fileName, int lineNum, const RestOfArgs& ... args)
@@ -60,8 +56,8 @@ namespace Log
         template<typename Stream, typename... RestOfArgs>
         Stream & Log(Stream & stream, std::stringstream& internalStream, LogLevel level, const char* debugLevel, const char* fileName, int lineNum, const RestOfArgs& ... args)
         {
-#ifdef __LOG_COLORS
-            
+
+#ifdef __ENABLE_LOGGING           
             if (level != m_LogLevel)
             {
                 m_LogLevel = level;
@@ -71,30 +67,30 @@ namespace Log
                 {
                     case LogLevel::DEBUG:
                     {
-                        TEXT_COLOR = TEXT_COLOR_BLUE;
+                        TEXT_COLOR = TextMod::ColorCode::FG_BLUE;
                         break;
                     }
 
                     case LogLevel::INFO:
                     {
-                        TEXT_COLOR = TEXT_COLOR_GREEN;
+                        TEXT_COLOR = TextMod::ColorCode::FG_GREEN;
                         break;
                     }
 
                     case LogLevel::WARN:
                     {
-                        TEXT_COLOR = TEXT_COLOR_YELLOW;
+                        TEXT_COLOR = TextMod::ColorCode::FG_YELLOW;
                         break;
                     }
 
                     case LogLevel::FATAL:
                     {
-                        TEXT_COLOR = TEXT_COLOR_RED;
+                        TEXT_COLOR = TextMod::ColorCode::FG_RED;
                         break;
                     }
                     default:
                     {
-                        TEXT_COLOR = TEXT_COLOR_DEFAULT;
+                        TEXT_COLOR = TextMod::ColorCode::FG_DEFAULT;
                     }
                 }
                 
@@ -102,7 +98,6 @@ namespace Log
 
             internalStream << TEXT_COLOR;
 #endif
-
             internalStream <<  "[" << debugLevel << "]";
 
 #ifdef __LOG_SHOW_LINE
@@ -124,18 +119,31 @@ namespace Log
         Stream & Log(Stream & stream, std::stringstream& internalStream, const ThisArg & arg1)
         {
             internalStream << arg1 << "\n";
+
 #ifdef __LOG_COLOR
             // Reset for non-logger messages
             TEXT_COLOR = TEXT_COLOR_DEFAULT;
             internalStream << TEXT_COLOR;
 #endif
+
             return (stream << internalStream.str());
         }
 
+    static Logger& Instance(void)
+    {
+        static Logger instance;
+        return instance;
+    }
+
+    ~Logger()
+    {
+        std::cout << TEXT_COLOR_DEFAULT;
+    }
+
+    Logger() {};
     
     private:
-        Logger() {};
-        ~Logger();
+
         Logger(Logger const&) = delete;
         void operator = (Logger const&) = delete;
         LogLevel m_LogLevel = LogLevel::NONE;
