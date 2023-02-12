@@ -5,6 +5,7 @@
 #include <Constants.hh>
 #include <dirent.h>
 #include <bits/stdc++.h>
+#include <EnvironmentVariables.hh>
 
 /* Object info */
 RETCODE ParseObjectEntry(std::istringstream& line, OBJECT_SCHEMA& out_object)
@@ -321,6 +322,12 @@ static RETCODE readAllDBHeader(OBJECT_SCHEMA& object_entry, std::vector<std::str
     size_t lineNum = 1;
     std::ifstream headerStream;
     std::stringstream allDBHeaderPath;
+    std::string INSTALL_DIR =
+        EnvironmentVariable::Instance().Get(KDB_INSTALL_DIR);
+    if("" == INSTALL_DIR)
+    {
+        return RTN_NOT_FOUND;
+    }
     allDBHeaderPath
         << INSTALL_DIR
         << COMMON_INC_PATH
@@ -367,6 +374,12 @@ static RETCODE readAllDBHeader(OBJECT_SCHEMA& object_entry, std::vector<std::str
 static RETCODE writeAllDBHeader(std::vector<std::string>& out_lines)
 {
     std::stringstream allDBHeaderPath;
+    std::string INSTALL_DIR =
+        EnvironmentVariable::Instance().Get(KDB_INSTALL_DIR);
+    if("" == INSTALL_DIR)
+    {
+        return RTN_NOT_FOUND;
+    }
     allDBHeaderPath
         << INSTALL_DIR
         << COMMON_INC_PATH
@@ -407,6 +420,12 @@ static RETCODE AddToAllDBHeader(OBJECT_SCHEMA& object_entry)
 static RETCODE OpenDBMapFile(std::ofstream& headerStream)
 {
     std::stringstream dbMapHeaderPath;
+    std::string INSTALL_DIR =
+        EnvironmentVariable::Instance().Get(KDB_INSTALL_DIR);
+    if("" == INSTALL_DIR)
+    {
+        return RTN_NOT_FOUND;
+    }
     dbMapHeaderPath
         << INSTALL_DIR
         << COMMON_INC_PATH
@@ -758,6 +777,7 @@ RETCODE GenerateAllDBFiles(const std::string& skmPath, const std::string& incPat
     }
     else
     {
+        LOG_FATAL("Could not find schema path: ", skmPath);
         /* could not open directory */
         return RTN_NOT_FOUND;
     }

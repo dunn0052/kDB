@@ -10,17 +10,19 @@
 #include <mutex>
 
 #if __ENABLE_LOGGING
-    #define LOG_TEMPLATE( LEVEL,  ... ) Log::Logger::Instance().Log(std::cout, Log::LogLevel::LEVEL, #LEVEL, __FILE__, __LINE__, ##__VA_ARGS__ )
+    #define LOG_TEMPLATE( LEVEL, ... ) Log::Logger::Instance().Log(std::cerr, Log::LogLevel::LEVEL, #LEVEL, __FILE__, __LINE__, ##__VA_ARGS__ )
+    #define LOG_ERROR_TEMPLATE( LEVEL, ... ) Log::Logger::Instance().Log(std::cerr, Log::LogLevel::LEVEL, #LEVEL, __FILE__, __LINE__, ##__VA_ARGS__ )
 #else
     #define LOG_TEMPLATE( LEVEL, ... )
+    #define LOG_ERROR_TEMPLATE( LEVEL, ...)
 #endif
 
 
 //#define LOG_DEBUG( MESSAGE, ... ) LOG_TEMPLATE( MESSAGE, DEBUG, ##__VA_ARGS__ )
 #define LOG_DEBUG( ... ) LOG_TEMPLATE( DEBUG, ##__VA_ARGS__ )
 #define LOG_INFO( ... ) LOG_TEMPLATE( INFO, ##__VA_ARGS__ )
-#define LOG_WARN( ... ) LOG_TEMPLATE( WARN, ##__VA_ARGS__ )
-#define LOG_FATAL( ... ) LOG_TEMPLATE( FATAL, ##__VA_ARGS__ )
+#define LOG_WARN( ... ) LOG_ERROR_TEMPLATE( WARN, ##__VA_ARGS__ )
+#define LOG_FATAL( ... ) LOG_ERROR_TEMPLATE( FATAL, ##__VA_ARGS__ )
 
 #if _ENABLE_ASSERTS
     #define GTD_ASSERT( PREDICATE, ... ) { if(!( PREDICATE )) { LOG_FATAL("Assertion Failed: %s", ##__VA_ARGS__); __debugbreak(); }}
@@ -41,7 +43,7 @@ namespace Log
     {
 
     public:
-        
+
         template<typename Stream, typename... RestOfArgs>
         Stream & Log(Stream& stream, LogLevel level, const char* debugLevel, const char* fileName, int lineNum, const RestOfArgs& ... args)
         {
@@ -57,7 +59,7 @@ namespace Log
         Stream & Log(Stream & stream, std::stringstream& internalStream, LogLevel level, const char* debugLevel, const char* fileName, int lineNum, const RestOfArgs& ... args)
         {
 
-#ifdef __ENABLE_LOGGING           
+#ifdef __ENABLE_LOGGING
             if (level != m_LogLevel)
             {
                 m_LogLevel = level;
@@ -93,7 +95,7 @@ namespace Log
                         TEXT_COLOR = TextMod::ColorCode::FG_DEFAULT;
                     }
                 }
-                
+
             }
 
             internalStream << TEXT_COLOR;
@@ -107,7 +109,7 @@ namespace Log
             internalStream << " "; // Space between decorator and user text
             return Log(stream, internalStream, args...);
         }
-     
+
         template<typename Stream, typename ThisArg, typename... RestOfArgs>
         Stream & Log(Stream & stream, std::stringstream& internalStream, const ThisArg & arg1, const RestOfArgs&... args)
         {
@@ -122,7 +124,7 @@ namespace Log
 
 #ifdef __LOG_COLOR
             // Reset for non-logger messages
-            TEXT_COLOR = TEXT_COLOR_DEFAULT;
+            TEXT_COLOR = TextMod::ColorCode::FG_DEFAULT;
             internalStream << TEXT_COLOR;
 #endif
 
@@ -137,29 +139,22 @@ namespace Log
 
     ~Logger()
     {
-        std::cout << TEXT_COLOR_DEFAULT;
+        TEXT_COLOR = TextMod::ColorCode::FG_DEFAULT;
+        std::cout << TEXT_COLOR;
     }
 
     Logger() {};
-    
+
     private:
 
         Logger(Logger const&) = delete;
         void operator = (Logger const&) = delete;
         LogLevel m_LogLevel = LogLevel::NONE;
-        TextMod::Modifier TEXT_COLOR = TEXT_COLOR_DEFAULT;
+        TextMod::Modifier TEXT_COLOR = TextMod::ColorCode::FG_DEFAULT;
         std::stringstream m_InternalStream;
 
     private:
-        // colors
-        static const TextMod::Modifier TEXT_COLOR_BLUE;
-        static const TextMod::Modifier TEXT_COLOR_GREEN;
-        static const TextMod::Modifier TEXT_COLOR_YELLOW;
-        static const TextMod::Modifier TEXT_COLOR_RED;
-        static const TextMod::Modifier TEXT_COLOR_DEFAULT;
 
-        // thread guard
-        std::mutex mMutex;
     };
 
 }

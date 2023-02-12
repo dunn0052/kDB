@@ -10,6 +10,7 @@ constexpr int _SERVER_VERSION = 1;
 #include <TasQ.hh>
 #include <Hook.hh>
 #include "../Profiler/inc/profiler.hh"
+#include <Logger.hh>
 
 #include <vector>
 #include <string>
@@ -197,7 +198,6 @@ public:
                 /*
                 *`epoll_wait` reached its timeout
                 */
-                //printf("I don't see any event within %d milliseconds\n", timeout);
                 continue;
             }
 
@@ -293,7 +293,7 @@ public:
         // Get address for self
         if((getInfoStatus = getaddrinfo(nullptr, m_Port.c_str(), &hints, &returnedAddrInfo)) != 0)
         {
-            fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(getInfoStatus));
+            LOG_WARN("getaddrinfo error: ", gai_strerror(getInfoStatus));
             return RTN_NOT_FOUND;
         }
         else

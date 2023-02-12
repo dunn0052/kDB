@@ -1,6 +1,7 @@
 #include <schema.hh>
 #include <CLI.hh>
 #include <Constants.hh>
+#include <EnvironmentVariables.hh>
 
 class CLI_DatabaseArgs : public CLI::CLI_Argument<OBJECT, 1, 1>
 {
@@ -42,6 +43,13 @@ int main(int argc, char* argv[])
     {
         parser.Usage();
         return retcode;
+    }
+
+    std::string INSTALL_DIR = EnvironmentVariable::Instance().Get(KDB_INSTALL_DIR);
+    if("" == INSTALL_DIR)
+    {
+        LOG_FATAL("Could not find ", KDB_INSTALL_DIR, " in environment!");
+        return RTN_NOT_FOUND;
     }
 
     const std::string db_schema_path = skm_path.IsInUse() ?

@@ -7,6 +7,7 @@
 #include <sstream>
 #include <string>
 #include <Logger.hh>
+#include <EnvironmentVariables.hh>
 
 static RETCODE GenerateDatabaseFile(const OBJECT& object_name, const std::string& dbPath)
 {
@@ -63,6 +64,12 @@ int main(int argc, char* argv[])
     if(objectArg.IsInUse())
     {
         RETCODE retcode = RTN_OK;
+        std::string INSTALL_DIR =
+            EnvironmentVariable::Instance().Get(KDB_INSTALL_DIR);
+        if("" == INSTALL_DIR)
+        {
+            return RTN_NOT_FOUND;
+        }
         std::string db_path = INSTALL_DIR + DB_DB_DIR;
         retcode = GenerateDatabaseFile(objectArg.GetValue(), db_path);
         if(IS_RETCODE_OK(retcode))
@@ -77,6 +84,12 @@ int main(int argc, char* argv[])
     else if(allArg.IsInUse())
     {
         RETCODE retcode = RTN_OK;
+        std::string INSTALL_DIR =
+            EnvironmentVariable::Instance().Get(KDB_INSTALL_DIR);
+        if("" == INSTALL_DIR)
+        {
+            return RTN_NOT_FOUND;
+        }
         std::string db_path = INSTALL_DIR + DB_DB_DIR;
         OBJECT current_object = {0};
         std::map<std::string, OBJECT_SCHEMA>::iterator it;
