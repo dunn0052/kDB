@@ -267,7 +267,7 @@ public:
         if(RTN_OK == retcode)
         {
             // Ignore broken pipe signal to prevent send/read from causing errors
-            sigignore(SIGPIPE);
+            signal(SIGPIPE, SIG_IGN);
 
             Start(0);
 

@@ -9,7 +9,7 @@ static bool running = true;
 
 static void quit_signal(int sig)
 {
-    LOG_INFO("Signal %d caught!", sig);
+    LOG_INFO("Signal ", sig, " caught!");
     running = false;
 }
 
@@ -20,22 +20,22 @@ static void StopListening(void)
 
 void PrintClientConnect(const CONNECTION& connection)
 {
-    LOG_INFO("Client connected %s:%d", connection.address, connection.port);
+    LOG_INFO("Client ", connection.address, ":", connection.port, "connected" );
 }
 
 void PrintServerConnect(const CONNECTION& connection)
 {
-    LOG_INFO("Server connected to %s:%d", connection.address, connection.port);
+    LOG_INFO("Server connected to ", connection.address, ":", connection.port);
 }
 
 void PrintDisconnect(const CONNECTION& connection)
 {
-    LOG_INFO("Connection disconnected %s:%d", connection.address, connection.port);
+    LOG_INFO("Client ", connection.address, ":", connection.port, "disconnected" );
 }
 
 void PrintMessage(const INET_PACKAGE* package)
 {
-    LOG_INFO("Connection %s:%d send a message: %s", package->header.connection.address, package->header.connection.port, package->payload);
+    LOG_INFO("Connection ", package->header.connection.address, ":", package->header.connection.port, " send a message: ", package->payload);
 }
 
 class WriteThread: public DaemonThread<TasQ<INET_PACKAGE*>*>
@@ -59,7 +59,7 @@ class WriteThread: public DaemonThread<TasQ<INET_PACKAGE*>*>
                 std::stringstream ofri_input;
                 ofri_input << user_input;
 
-                LOG_INFO("OFRI: %s", ofri_input.str().c_str());
+                LOG_INFO("OFRI: ", ofri_input.str());
                 OFRI ofri = {0};
                 if(ofri_input >> ofri.o >> ofri.r >> ofri.f >> ofri.i)
                 {
@@ -69,7 +69,7 @@ class WriteThread: public DaemonThread<TasQ<INET_PACKAGE*>*>
                 }
                 else
                 {
-                    LOG_WARN("Failed to read ofri: %s", user_input.c_str());
+                    LOG_WARN("Failed to read ofri: ", user_input);
                     continue;
                 }
             }
@@ -122,7 +122,7 @@ int main(int argc, char* argv[])
             LOG_WARN("Failed to start listening!\nExiting\n");
             return retcode;
         }
-        LOG_INFO("Listening for connections on: %s:%s", connection.GetTCPAddress().c_str(), connection.GetTCPPort().c_str());
+        LOG_INFO("Listening for connections on: ", connection.GetTCPAddress(), ":", connection.GetTCPPort());
 
         // Connection if requested
         if(connectionAddressArg.IsInUse() && connectionPortArg.IsInUse())
@@ -132,11 +132,11 @@ int main(int argc, char* argv[])
                 connectionPortArg.GetValue());
             if(RTN_OK != retcode)
             {
-                LOG_WARN("Couldn't connect to %s:%s\nExiting...",
-                    connection.GetTCPAddress().c_str(), connectionPortArg.GetValue().c_str());
+                LOG_WARN("Couldn't connect to ",
+                    connection.GetTCPAddress(), connectionPortArg.GetValue());
             }
-            LOG_INFO("Connected to %s:%s with socket %d",
-                connection.GetTCPAddress().c_str(), connectionPortArg.GetValue().c_str(), connection.GetTCPSocket());
+            LOG_INFO("Connected to ", connection.GetTCPAddress(),  ":", connectionPortArg.GetValue(), " with socket: ",
+                 connection.GetTCPSocket());
 
         }
 
@@ -171,7 +171,7 @@ int main(int argc, char* argv[])
         }
         else
         {
-            LOG_WARN("Could not connect to %s:%s", connectionAddressArg.GetValue().c_str(), connectionPortArg.GetValue().c_str());
+            LOG_WARN("Could not connect to ", connectionAddressArg.GetValue().c_str(), ":", connectionPortArg.GetValue().c_str());
         }
     }
 }

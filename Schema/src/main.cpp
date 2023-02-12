@@ -38,6 +38,11 @@ int main(int argc, char* argv[])
         .AddArg(databaseArgs);
 
     RETCODE retcode = parser.ParseCommandLineArguments(argc, argv);
+    if(!IS_RETCODE_OK(retcode))
+    {
+        parser.Usage();
+        return retcode;
+    }
 
     const std::string db_schema_path = skm_path.IsInUse() ?
         skm_path.GetValue() : INSTALL_DIR + DB_SKM_DIR;
@@ -55,7 +60,7 @@ int main(int argc, char* argv[])
         #endif
         if(!IS_RETCODE_OK(retcode))
         {
-            LOG_WARN("Failed generating files for %s", objectName);
+            LOG_WARN("Failed generating files for ", objectName);
         }
     }
     else if(all_arg.IsInUse())

@@ -153,14 +153,14 @@ namespace CLI
             }
             catch(std::invalid_argument const& except)
             {
-                LOG_WARN("Could not convert %s with argument %s because it could not be converted to an integer!", m_Option.c_str(), conversion.c_str());
+                LOG_WARN("Could not convert ", m_Option, " with argument ", conversion, " because it could not be converted to an integer!");
                 m_InUse = false;
                 return false;
 
             }
             catch(std::out_of_range const& except)
             {
-                LOG_WARN("Could not convert %s with argument %s because the number is too large!", m_Option.c_str(), conversion.c_str());
+                LOG_WARN("Could not convert ", m_Option, " with argument ", conversion, " because the number is too large!");
                 m_InUse = false;
                 return false;
             }
