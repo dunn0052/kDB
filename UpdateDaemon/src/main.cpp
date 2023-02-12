@@ -15,25 +15,25 @@ static void quit_signal(int sig)
     // strsignal is not MT-safe
     char signal_text[64];
     strcpy(signal_text, strsignal(sig));
-    LOG_INFO("Quitting on signal: %s", signal_text);
+    LOG_INFO("Quitting on signal: ", signal_text);
     g_process_is_running = false;
 }
 
 static void client_connect(const CONNECTION& connection)
 {
-    LOG_INFO("Client %s:%d connected", connection.address, connection.port);
+    LOG_INFO("Client ", connection.address, ":", connection.port, " connected" );
 }
 
 static void client_disconnect(const CONNECTION& connection)
 {
-    LOG_INFO("Client %s:%d disconnected", connection.address, connection.port);
+    LOG_INFO("Client ", connection.address, ":", connection.port, " disconnected" );
 }
 
 // Route changes from clients to one of N incoming change queues depending on
 // Which shard the change belongs to
 static void ClientRequest(const INET_PACKAGE* package)
 {
-    LOG_DEBUG("Client %s:%d request", package->header.connection.address, package->header.connection.port);
+    LOG_DEBUG("Client ", package->header.connection.address, ":", package->header.connection.port, " request");
 
     INET_PACKAGE* request = reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_HEADER) + package->header.message_size]);
     request->header = package->header;
@@ -43,13 +43,13 @@ static void ClientRequest(const INET_PACKAGE* package)
     OBJECT_SCHEMA object_info;
     if(RTN_OK != TryGetObjectInfo(std::string(ofri->o), object_info))
     {
-        LOG_WARN("Could not open %s -- denied", ofri->o);
+        LOG_WARN("Could not open: ", ofri->o);
         return;
     }
 
     if(object_info.numberOfRecords < ofri->r)
     {
-        LOG_WARN("Invalid record: %lu > max: %lu", ofri->r, object_info.numberOfRecords);
+        LOG_WARN("Invalid record: ", ofri->r, " > max: ", object_info.numberOfRecords);
         return;
     }
 
@@ -81,9 +81,7 @@ int main(int argc, char* argv[])
 
     PollThread connection(portArg.GetValue());
 
-    LOG_INFO("Connection on %s:%s",
-        connection.GetTCPAddress().c_str(),
-        connection.GetTCPPort().c_str());
+    LOG_INFO("Connection on ", connection.GetTCPAddress(), ":", connection.GetTCPPort());
 
     connection.m_OnReceive += ClientRequest;
     connection.m_OnClientConnect += client_connect;

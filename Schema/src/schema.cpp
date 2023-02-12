@@ -15,7 +15,7 @@ RETCODE ParseObjectEntry(std::istringstream& line, OBJECT_SCHEMA& out_object)
         return RTN_NOT_FOUND;
     }
 
-    LOG_DEBUG("OBJECT NUMBER: %u OBJECT NAME: %s NUMBER OF RECORDS: %u", out_object.objectNumber, out_object.objectName.c_str(), out_object.numberOfRecords);
+    LOG_DEBUG("OBJECT NUMBER: ", out_object.objectNumber, " OBJECT NAME: ", out_object.objectName, " NUMBER OF RECORDS: ", out_object.numberOfRecords);
 
     return RTN_OK;
 }
@@ -28,7 +28,7 @@ RETCODE ParseFieldEntry(std::istringstream& line, FIELD_SCHEMA& out_field)
         return RTN_NOT_FOUND;
     }
 
-    LOG_DEBUG("FIELD NUMBER: %u FIELD NAME: %s FIELD TYPE: %c NUMBER OF ELEMENTS: %u", out_field.fieldNumber, out_field.fieldName.c_str(), out_field.fieldType, out_field.numElements);
+    LOG_DEBUG("FIELD NUMBER: ", out_field.fieldNumber, " FIELD NAME: ", out_field.fieldName, " FIELD TYPE: ", out_field.fieldType, " NUMBER OF ELEMENTS: ", out_field.numElements);
 
     return RTN_OK;
 }
@@ -295,19 +295,19 @@ static RETCODE GenerateDatabaseFile(OBJECT_SCHEMA& object_entry, const std::stri
     int fd = open(path.c_str(), O_RDWR | O_CREAT, 0666);
     if( 0 > fd )
     {
-        LOG_WARN("Failed to open or create %s", path.c_str());
+        LOG_WARN("Failed to open or create ", path);
         retcode |=  RTN_NOT_FOUND;
     }
 
     if( ftruncate64(fd, fileSize) )
     {
-        LOG_WARN("Failed to truncate %s to size %u", path.c_str(), fileSize);
+        LOG_WARN("Failed to truncate ", path, " to size ", fileSize);
         retcode |= RTN_MALLOC_FAIL;
     }
 
     if( close(fd) )
     {
-        LOG_WARN("Failed to close %s", path.c_str());
+        LOG_WARN("Failed to close ", path);
         retcode |= RTN_FAIL;
     }
 
@@ -332,8 +332,7 @@ static RETCODE readAllDBHeader(OBJECT_SCHEMA& object_entry, std::vector<std::str
 
     if( !headerStream.is_open() )
     {
-        LOG_WARN("Could not open up %s for reading!",
-            allDBHeaderPath.str().c_str());
+        LOG_WARN("Could not open up ", allDBHeaderPath.str(), " for reading!");
         return RTN_NOT_FOUND;
     }
 
@@ -379,7 +378,7 @@ static RETCODE writeAllDBHeader(std::vector<std::string>& out_lines)
 
     if( !headerStream.is_open() )
     {
-        LOG_WARN("Could not open up %s for writing", allDBHeaderPath.str().c_str());
+        LOG_WARN("Could not open up ", allDBHeaderPath.str(), " for writing");
         return RTN_NOT_FOUND;
     }
 
@@ -419,7 +418,7 @@ static RETCODE OpenDBMapFile(std::ofstream& headerStream)
 
     if( !headerStream.is_open() )
     {
-        LOG_WARN("Could not open up %s for writing", dbMapHeaderPath.str().c_str());
+        LOG_WARN("Could not open up ", dbMapHeaderPath.str(), " for writing");
         return RTN_NOT_FOUND;
     }
 
@@ -500,7 +499,7 @@ static RETCODE GenerateObject(const OBJECT& objectName, const std::string& skmPa
 
     if( !schemaFile.is_open() )
     {
-        LOG_WARN("Could not open %s", schema_path.str().c_str());
+        LOG_WARN("Could not open ", schema_path.str());
         return RTN_NOT_FOUND;
     }
 
@@ -529,8 +528,7 @@ static RETCODE GenerateObject(const OBJECT& objectName, const std::string& skmPa
             retcode |= ParseObjectEntry(lineStream, out_object_entry);
             if( RTN_OK != retcode )
             {
-                LOG_WARN("Error reading object entry: %s%s.skm:%d",
-                    skmPath.c_str(), objectName, currentLineNum);
+                LOG_WARN("Error reading object entry: ", skmPath, objectName, ".skm:", currentLineNum);
                 return retcode;
             }
 
@@ -544,15 +542,13 @@ static RETCODE GenerateObject(const OBJECT& objectName, const std::string& skmPa
 
             if( RTN_OK != retcode )
             {
-                LOG_WARN("Error reading field entry: %s%s.skm:%d",
-                    skmPath.c_str(), objectName, currentLineNum);
+                LOG_WARN("Error reading field entry: ", skmPath, objectName, ".skm:", currentLineNum);
                 return retcode;
             }
 
             if(!TrySetFieldSize(field_entry))
             {
-                LOG_WARN("Invalid field entry: %s%s.skm:%d",
-                    skmPath.c_str(), objectName, currentLineNum);
+                LOG_WARN("Invalid field entry: ", skmPath  , objectName, ".skm:", currentLineNum);
                 retcode |= RTN_NOT_FOUND;
                 return retcode;
             }
@@ -565,7 +561,7 @@ static RETCODE GenerateObject(const OBJECT& objectName, const std::string& skmPa
 
     if( schemaFile.bad() )
     {
-        LOG_WARN("Error reading %s%s.skm", skmPath.c_str(), objectName);
+        LOG_WARN("Error reading ", skmPath, objectName, ".skm");
         retcode |= RTN_FAIL;
     }
 
@@ -582,7 +578,7 @@ static RETCODE GenerateHeaderFile(OBJECT_SCHEMA& object_entry, const std::string
     headerFile.open(header_file_path);
     if( !headerFile.is_open() )
     {
-        LOG_WARN("Could not open %s", header_file_path.c_str());
+        LOG_WARN("Could not open ", header_file_path);
         return RTN_NOT_FOUND;
     }
 
@@ -624,7 +620,7 @@ RETCODE GenerateObjectDBFiles(const OBJECT& objectName,
     RETCODE retcode = GenerateObject(objectName, skmPath, object_entry);
     if( RTN_OK != retcode )
     {
-        LOG_WARN("Error generating %s", object_entry.objectName.c_str());
+        LOG_WARN("Error generating ", object_entry.objectName);
         return retcode;
     }
 
@@ -633,35 +629,33 @@ RETCODE GenerateObjectDBFiles(const OBJECT& objectName,
     retcode |= GenerateHeaderFile(object_entry, header_path.str());
     if( RTN_OK != retcode )
     {
-        LOG_WARN("Error generating %s.hh", object_entry.objectName.c_str());
+        LOG_WARN("Error generating ", object_entry.objectName, ".hh");
         return retcode;
     }
-    LOG_INFO("Generated %s.hh", object_entry.objectName.c_str());
+    LOG_INFO("Generated ", object_entry.objectName, ".hh");
 
 #if 0
     retcode |= GenerateDatabaseFile(object_entry, objectName, dbPath);
     if( RTN_OK != retcode )
     {
-        LOG_WARN("Error generating %s.db", object_entry.objectName.c_str());
+                LOG_WARN("Error generating ", object_entry.objectName, ".db");
         return retcode;
     }
-    LOG_INFO("Generated %s.db", object_entry.objectName.c_str());
+    LOG_INFO("Generated ", object_entry.objectName, ".db");
 #endif
 
     retcode |= AddToAllDBHeader(object_entry);
     if( RTN_OK != retcode )
     {
-        LOG_WARN("Error adding %s to allHeader.hh",
-            object_entry.objectName.c_str());
+        LOG_WARN("Error adding ", object_entry.objectName, " to allHeader.hh");
         return retcode;
     }
-    LOG_INFO("Added to %s to allHeader.hh", object_entry.objectName.c_str());
+    LOG_INFO("Added ", object_entry.objectName, " to allHeader.hh");
 
     retcode |= WriteDBMapObject(dbMapStream, object_entry);
     if( RTN_OK != retcode )
     {
-        LOG_WARN("Error adding %s to DBMap.hh",
-            object_entry.objectName.c_str());
+        LOG_WARN("Error adding ", object_entry.objectName, " to DBMap.hh");
         return retcode;
     }
 
@@ -719,13 +713,12 @@ RETCODE GenerateAllDBFiles(const std::string& skmPath, const std::string& incPat
 
             if(RTN_OK == retcode)
             {
-                LOG_DEBUG("Found schema file: %s", foundFile.c_str());
+                LOG_DEBUG("Found schema file: ", foundFile);
                 schema_files.push_back(objectName);
             }
             else
             {
-                LOG_WARN("File: %s does not have a %s extension",
-                    foundFile.c_str(),  SKM_EXT.c_str());
+                LOG_WARN("File: ", foundFile, " does not have a ", SKM_EXT, " extension");
             }
         }
 

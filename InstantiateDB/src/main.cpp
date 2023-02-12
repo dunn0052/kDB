@@ -24,27 +24,26 @@ static RETCODE GenerateDatabaseFile(const OBJECT& object_name, const std::string
     }
     else
     {
-        LOG_WARN("Could not find %s in DBMap.hh! Run Schema tool again",
-            object_name);
+        LOG_WARN("Could not find ", object_name, " in DBMap.hh! Run Schema tool again");
         return RTN_NOT_FOUND;
     }
 
     int fd = open(path.c_str(), O_RDWR | O_CREAT, 0666);
     if( 0 > fd )
     {
-        LOG_WARN("Failed to open or create %s", path.c_str());
+        LOG_WARN("Failed to open or create ", path);
         retcode |=  RTN_NOT_FOUND;
     }
 
     if( ftruncate64(fd, fileSize) )
     {
-        LOG_WARN("Failed to truncate %s to size %u", path.c_str(), fileSize);
+        LOG_WARN("Failed to truncate ", path, " to size ", fileSize);
         retcode |= RTN_MALLOC_FAIL;
     }
 
     if( close(fd) )
     {
-        LOG_WARN("Failed to close %s", path.c_str());
+        LOG_WARN("Failed to close ", path);
         retcode |= RTN_FAIL;
     }
 
@@ -68,13 +67,11 @@ int main(int argc, char* argv[])
         retcode = GenerateDatabaseFile(objectArg.GetValue(), db_path);
         if(IS_RETCODE_OK(retcode))
         {
-            LOG_INFO("Generated %s%s.db",
-                db_path.c_str(), objectArg.GetValue());
+            LOG_INFO("Generated ", db_path, objectArg.GetValue(), ".db");
         }
         else
         {
-            LOG_WARN("Failed to generate %s%s.db",
-                db_path.c_str(), objectArg.GetValue());
+            LOG_WARN("Failed to generate ", db_path.c_str(), objectArg.GetValue(), ".db");
         }
     }
     else if(allArg.IsInUse())
@@ -89,13 +86,11 @@ int main(int argc, char* argv[])
             retcode = GenerateDatabaseFile(current_object, db_path);
             if(IS_RETCODE_OK(retcode))
             {
-                LOG_INFO("Generated %s%s.db",
-                    db_path.c_str(), current_object);
+                LOG_INFO("Generated ", db_path, current_object, ".db");
             }
             else
             {
-                LOG_WARN("Failed to generate %s%s.db",
-                    db_path.c_str(), current_object);
+                LOG_WARN("Failed to generate ", db_path.c_str(), current_object, ".db");
             }
         }
     }
