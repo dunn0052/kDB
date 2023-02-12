@@ -3,6 +3,7 @@
 
 #include <DBMap.hh>
 #include <Constants.hh>
+#include <EnvironmentVariables.hh>
 #include <iostream>
 #include <fcntl.h>
 #include <unistd.h>
@@ -303,6 +304,12 @@ class DatabaseAccess
         int OpenDatabase()
         {
             std::stringstream filepath;
+            std::string INSTALL_DIR =
+                EnvironmentVariable::Instance().Get(KDB_INSTALL_DIR);
+            if("" == INSTALL_DIR)
+            {
+                return -1;
+            }
             filepath << INSTALL_DIR << DB_DB_DIR << m_ObjectName << DB_EXT;
             const std::string path = filepath.str();
             int fd = open(path.c_str(), O_RDWR);

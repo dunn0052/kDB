@@ -10,10 +10,11 @@ static const std::string DB_EXT = ".db";
 static const std::string COMMON_INC_PATH = "common_inc/";
 static const std::string ALL_DB_HEADER_NAME = "allDBs";
 static const std::string DB_MAP_HEADER_NAME = "DBMap";
-static const std::string INSTALL_DIR = "/home/osboxes/Documents/Projects/kDB/";
 static const std::string DB_DIR = "db/";
 static const std::string DB_INC_DIR = DB_DIR + "inc/";
 static const std::string DB_SKM_DIR = DB_DIR + "skm/";
 static const std::string DB_DB_DIR = DB_DIR + "db/";
+
+static const std::string KDB_INSTALL_DIR = "KDB_INSTALL_DIR";
 
 #endif
