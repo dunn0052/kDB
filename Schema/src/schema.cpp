@@ -777,7 +777,7 @@ RETCODE GenerateAllDBFiles(const std::string& skmPath, const std::string& incPat
     }
     else
     {
-        LOG_FATAL("Could not find schema path: ", skmPath);
+        LOG_ERROR("Could not find schema path: ", skmPath);
         /* could not open directory */
         return RTN_NOT_FOUND;
     }

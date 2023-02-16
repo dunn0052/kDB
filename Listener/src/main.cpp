@@ -133,7 +133,7 @@ int main(int argc, char* argv[])
             if(RTN_OK != retcode)
             {
                 LOG_WARN("Couldn't connect to ",
-                    connection.GetTCPAddress(), connectionPortArg.GetValue());
+                    connection.GetTCPAddress(), ":", connectionPortArg.GetValue());
             }
             LOG_INFO("Connected to ", connection.GetTCPAddress(),  ":", connectionPortArg.GetValue(), " with socket: ",
                  connection.GetTCPSocket());
@@ -171,7 +171,7 @@ int main(int argc, char* argv[])
         }
         else
         {
-            LOG_WARN("Could not connect to ", connectionAddressArg.GetValue().c_str(), ":", connectionPortArg.GetValue().c_str());
+            LOG_WARN("Failed -- exiting!");
         }
     }
 }

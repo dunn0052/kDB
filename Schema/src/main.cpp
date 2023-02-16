@@ -48,7 +48,7 @@ int main(int argc, char* argv[])
     std::string INSTALL_DIR = EnvironmentVariable::Instance().Get(KDB_INSTALL_DIR);
     if("" == INSTALL_DIR)
     {
-        LOG_FATAL("Could not find ", KDB_INSTALL_DIR, " in environment!");
+        LOG_ERROR("Could not find ", KDB_INSTALL_DIR, " in environment!");
         return RTN_NOT_FOUND;
     }
 

@@ -22,10 +22,10 @@
 #define LOG_DEBUG( ... ) LOG_TEMPLATE( DEBUG, ##__VA_ARGS__ )
 #define LOG_INFO( ... ) LOG_TEMPLATE( INFO, ##__VA_ARGS__ )
 #define LOG_WARN( ... ) LOG_ERROR_TEMPLATE( WARN, ##__VA_ARGS__ )
-#define LOG_FATAL( ... ) LOG_ERROR_TEMPLATE( FATAL, ##__VA_ARGS__ )
+#define LOG_ERROR( ... ) LOG_ERROR_TEMPLATE( ERROR, ##__VA_ARGS__ )
 
 #if _ENABLE_ASSERTS
-    #define GTD_ASSERT( PREDICATE, ... ) { if(!( PREDICATE )) { LOG_FATAL("Assertion Failed: %s", ##__VA_ARGS__); __debugbreak(); }}
+    #define GTD_ASSERT( PREDICATE, ... ) { if(!( PREDICATE )) { LOG_ERROR("Assertion Failed: %s", ##__VA_ARGS__); __debugbreak(); }}
 #endif
 
 namespace Log
@@ -35,7 +35,7 @@ namespace Log
         DEBUG,
         INFO,
         WARN,
-        FATAL,
+        ERROR,
         NONE
     };
 
@@ -85,7 +85,7 @@ namespace Log
                         break;
                     }
 
-                    case LogLevel::FATAL:
+                    case LogLevel::ERROR:
                     {
                         TEXT_COLOR = TextMod::ColorCode::FG_RED;
                         break;
