@@ -185,19 +185,12 @@ public:
         while(StopRequested() == false)
         {
             retcode = HandleSends();
-            /*
-            * I sleep on `epoll_wait` and the kernel will wake me up
-            * when event comes to my monitored file descriptors, or
-            * when the timeout reached.
-            */
-            num_poll_events = epoll_wait(m_PollFD, events, maxevents, timeout);
 
+            num_poll_events = epoll_wait(m_PollFD, events, maxevents, timeout);
 
             if (num_poll_events == 0)
             {
-                /*
-                *`epoll_wait` reached its timeout
-                */
+                // timeout
                 continue;
             }
 
@@ -207,13 +200,13 @@ public:
                 err = errno;
                 if (err == EINTR)
                 {
-                    std::cout << "Interrupted during epoll!\n";
+                    LOG_WARN("Interrupted during epoll!");
                     continue;
                 }
 
                 /* Error */
                 ret = -1;
-                std::cout << "Error in epoll wait: " << strerror(err) << "\n";
+                LOG_ERROR("Error in epoll wait: ", strerror(err));
                 break;
             }
 
@@ -229,7 +222,7 @@ public:
                     */
                     if (RTN_OK != AcceptNewClient())
                     {
-                        std::cout << "Failed to accept client socket: " << fd << "\n";
+                        LOG_WARN("Failed to accept client socket: ",fd);
                     }
                     continue;
                 }
@@ -245,15 +238,13 @@ public:
                     // Send signal that it's not available for sending??
                 }
 
-
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
 
 
         }
 
-        std::cout << "Stopped polling thread\n";
-
+        LOG_INFO("Stopped polling thread");
     }
 
     PollThread(const std::string& portNumber = "") :
@@ -293,7 +284,7 @@ public:
         // Get address for self
         if((getInfoStatus = getaddrinfo(nullptr, m_Port.c_str(), &hints, &returnedAddrInfo)) != 0)
         {
-            LOG_WARN("getaddrinfo error: ", gai_strerror(getInfoStatus));
+            LOG_ERROR("getaddrinfo error: ", gai_strerror(getInfoStatus));
             return RTN_NOT_FOUND;
         }
         else
@@ -316,22 +307,21 @@ public:
             if ((m_TCPSocket = socket(currentAddrInfo->ai_family, currentAddrInfo->ai_socktype,
                     currentAddrInfo->ai_protocol)) == -1)
             {
-                perror("server: socket");
+                LOG_WARN("Could not create TCP socket for listening");
                 continue;
             }
 
             if (setsockopt(m_TCPSocket, SOL_SOCKET, SO_REUSEADDR, &yes,
                     sizeof(int)) == -1)
             {
+                LOG_ERROR("Failed to set TCP socket options");
                 return RTN_CONNECTION_FAIL;
             }
 
-
-            // We got one, so bind!
             if (bind(m_TCPSocket, currentAddrInfo->ai_addr, currentAddrInfo->ai_addrlen) == -1)
             {
                 close(m_TCPSocket);
-                perror("server: bind");
+                LOG_WARN("Could not bind socket: ", m_TCPSocket, " for listening");
                 continue;
             }
 
@@ -341,8 +331,15 @@ public:
         // Start listening for connections
         if(-1 == listen(m_TCPSocket, 10))
         {
+            LOG_ERROR("Failed to start listening on socket: ", m_TCPSocket);
             return RTN_CONNECTION_FAIL;
         }
+
+        CONNECTION self_connection;
+        strncpy(self_connection.address, m_Address.c_str(), sizeof(self_connection.address));
+        std::stringstream portstream(m_Port);
+        portstream >> self_connection.port;
+        m_OnServerConnect.Invoke(self_connection);
 
         // Cleanup
         freeaddrinfo(returnedAddrInfo);
@@ -371,7 +368,7 @@ public:
 
         if ((rv = getaddrinfo(address.c_str(), port.c_str(), &hints, &returnedAddrInfo)) != 0)
         {
-            fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+            LOG_ERROR("getaddrinfo: ", gai_strerror(rv));
             return RTN_NOT_FOUND;
         }
 
@@ -385,7 +382,7 @@ public:
                  currentAddrInfo->ai_socktype,
                  currentAddrInfo->ai_protocol)) == -1)
             {
-                perror("client: socket");
+                LOG_ERROR("Error creating client socket");
                 continue;
             }
 
@@ -395,7 +392,7 @@ public:
                         currentAddrInfo->ai_addrlen) == -1)
             {
                 close(connectedSocket);
-                perror("client: connect");
+                LOG_ERROR("Client failed to connect");
                 continue;
             }
 
@@ -434,17 +431,14 @@ public:
             std::stringstream portstream(port);
             portstream >> conn.port;
             AddConnection(connectedSocket, conn, EPOLLIN | EPOLLPRI);
-            m_ConnectionMap[conn] = connectedSocket;
-            m_FDMap[connectedSocket] = conn;
         }
         else
         {
-            std::cout
-                << "Failed sending acknowledgement to server: "
-                << address
-                << " on port: "
-                << port
-                << "\n";
+            LOG_WARN(
+                "Failed sending acknowledgement to server: ",
+                address,
+                " on port: ",
+                port);
         }
 
         return retcode;
@@ -497,7 +491,7 @@ public:
             }
 
             /* Error */
-            std::cout << "Error receving data from socket: " << fd << "\n";
+            LOG_WARN("Error receving data from socket: ", fd);
             RemoveConnection(fd, connection);
             return RTN_CONNECTION_FAIL;
         }
@@ -517,7 +511,7 @@ public:
             if (err != EAGAIN)
             {
                 /* Error */
-                std::cout << "Error receving data from socket: " << fd << "\n";
+                LOG_WARN("Error receving data from socket: ", fd);
                 RemoveConnection(fd, connection);
                 return RTN_CONNECTION_FAIL;
             }
@@ -550,7 +544,7 @@ public:
             }
             else
             {
-                std::cout << "Could not find: " << packet->header.connection.address << "sending failed!\n";
+                LOG_WARN("Could not find: ", packet->header.connection.address, "sending failed!");
             }
 
             delete packet;
@@ -617,7 +611,7 @@ public:
             }
 
             /* Error */
-            std::cout << "Error in accept(): " << strerror(err) << "\n";
+            LOG_ERROR("Error in accept(): ", strerror(err));
             return RTN_FAIL;
         }
 
@@ -637,12 +631,11 @@ public:
         if (0 > epoll_ctl(m_PollFD, EPOLL_CTL_ADD, fd, &event))
         {
             err = errno;
-            std::cout
-                << "Failed to add socket: "
-                << fd
-                << " to polling with error: "
-                << strerror(err)
-                << "\n";
+            LOG_ERROR(
+                "Failed to add socket: ",
+                fd,
+                " to polling with error: ",
+                strerror(err));
             return RTN_FAIL;
         }
 
@@ -680,12 +673,10 @@ public:
         if (0 > epoll_ctl(m_PollFD, EPOLL_CTL_DEL, fd, NULL))
         {
             err = errno;
-            std::cout
-                << "Failed to remove socket: "
-                << fd
-                << " from polling with error: "
-                << strerror(err)
-                << "\n";
+            LOG_ERROR("Failed to remove socket: ",
+                fd,
+                " from polling with error: ",
+                strerror(err));
             return RTN_FAIL;
         }
         else
@@ -693,12 +684,10 @@ public:
             if(close(fd))
             {
                 err = errno;
-                std::cout
-                    << "Failed to close socket: "
-                    << fd
-                    << " from polling with error: "
-                    << strerror(err)
-                    << "\n";
+                LOG_ERROR("Failed to close socket: ",
+                    fd,
+                    " from polling with error: ",
+                    strerror(err));
             }
 
         }
@@ -716,7 +705,7 @@ public:
         if (m_PollFD < 0)
         {
             err = errno;
-            std::cout << "Error creating epoll: " << strerror(err) << " \n";
+            LOG_ERROR("Error creating epoll: ", strerror(err));
             return RTN_FAIL;
         }
 
