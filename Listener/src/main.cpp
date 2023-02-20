@@ -20,7 +20,7 @@ static void StopListening(void)
 
 void PrintClientConnect(const CONNECTION& connection)
 {
-    LOG_INFO("Client ", connection.address, ":", connection.port, "connected" );
+    LOG_INFO("Client ", connection.address, ":", connection.port, " connected" );
 }
 
 void PrintServerConnect(const CONNECTION& connection)
@@ -30,7 +30,7 @@ void PrintServerConnect(const CONNECTION& connection)
 
 void PrintDisconnect(const CONNECTION& connection)
 {
-    LOG_INFO("Client ", connection.address, ":", connection.port, "disconnected" );
+    LOG_INFO("Client ", connection.address, ":", connection.port, " disconnected" );
 }
 
 void PrintMessage(const INET_PACKAGE* package)
