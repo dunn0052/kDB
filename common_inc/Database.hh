@@ -1,3 +1,6 @@
+#ifndef __DATABASE_HH
+#define __DATABASE__HH
+
 #include <OFRI.hh>
 #include <retcode.hh>
 #include <demangler.hh>
@@ -9,8 +12,6 @@
 #include <sstream>
 #include <fcntl.h>
 #include <unistd.h>
-
-static const std::string DB_EXT = ".db";
 
 struct MappedMemory
 {
@@ -93,3 +94,5 @@ class Database
         std::string m_DBFilePath;
         char* GetObjectMem(const OBJECT& databaseName);
 };
+
+#endif

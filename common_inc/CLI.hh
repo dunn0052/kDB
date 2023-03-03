@@ -272,14 +272,12 @@ namespace CLI
                     isArgGood = ParseArg(argv[argument_index]);
                     if( !isArgGood )
                     {
-                        Usage();
                         return RTN_FAIL;
                     }
                 }
 
                 if( !ValidateArgs() )
                 {
-                    Usage();
                     return RTN_FAIL;
                 }
 

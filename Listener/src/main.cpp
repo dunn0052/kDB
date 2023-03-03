@@ -4,6 +4,7 @@
 #include <Logger.hh>
 #include <DatabaseSubscription.hh>
 #include <TasQ.hh>
+#include <MessageTypes.hh>
 
 static bool running = true;
 
@@ -35,7 +36,19 @@ void PrintDisconnect(const CONNECTION& connection)
 
 void PrintMessage(const INET_PACKAGE* package)
 {
-    LOG_INFO("Connection ", package->header.connection.address, ":", package->header.connection.port, " send a message: ", package->payload);
+    switch(package->header.data_type)
+    {
+        case MESSAGE_TYPE::TEXT:
+        {
+            LOG_INFO("Connection ", package->header.connection.address, ":", package->header.connection.port, " sent a message: ", package->payload);
+            break;
+        }
+        default:
+        {
+            LOG_INFO("Connection ", package->header.connection.address, ":", package->header.connection.port, " sent a package");
+            break;
+        }
+    }
 }
 
 class WriteThread: public DaemonThread<TasQ<INET_PACKAGE*>*>
@@ -65,6 +78,7 @@ class WriteThread: public DaemonThread<TasQ<INET_PACKAGE*>*>
                 {
                     message = reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + sizeof(OFRI)]);
                     message->header.message_size = sizeof(OFRI);
+                    message->header.data_type = MESSAGE_TYPE::DB;
                     memcpy(message->payload, &ofri, sizeof(OFRI));
                 }
                 else
@@ -77,6 +91,7 @@ class WriteThread: public DaemonThread<TasQ<INET_PACKAGE*>*>
             {
                 message = reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + user_input.length() + 1]);
                 message->header.message_size = user_input.length() + 1;
+                message->header.data_type = MESSAGE_TYPE::TEXT;
                 strncpy(message->payload, user_input.c_str(), user_input.length() + 1);
             }
             messages.Push(message);
@@ -93,14 +108,12 @@ int main(int argc, char* argv[])
     CLI::CLI_StringArgument connectionAddressArg("-c", "Connection address for Other", false);
     CLI::CLI_StringArgument connectionPortArg("-p", "Connection port for Other", false);
     CLI::CLI_StringArgument listeningPortArg("-l", "Listening port", true);
-    CLI::CLI_IntArgument waitListenArg("-w", "Time to wait for sending messages", true);
     CLI::CLI_FlagArgument helpArg("-h", "Shows usage", false);
 
     parse
         .AddArg(connectionAddressArg)
         .AddArg(connectionPortArg)
         .AddArg(listeningPortArg)
-        .AddArg(waitListenArg)
         .AddArg(helpArg);
 
 
