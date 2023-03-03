@@ -148,7 +148,7 @@ public:
                 char* p_read_pointer = access.Get(ofri.r);
 
                 PrintDBObject(object_info, p_read_pointer, ofri.r);
-
+                
                 INET_PACKAGE* outgoing_package = reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_HEADER) + object_info.objectSize]);
                 memcpy(outgoing_package, &(incoming_request->header), sizeof(INET_HEADER));
                 memcpy(outgoing_package->payload, p_read_pointer, object_info.objectSize);

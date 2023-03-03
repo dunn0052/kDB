@@ -117,6 +117,11 @@ static bool TryGenerateDataType(FIELD_SCHEMA& field, std::string& dataType)
             dataType = "unsigned char";
             break;
         }
+        case 'X':
+        {
+            dataType = "unsigned char";
+            break;
+        }
         default:
         {
             return false;
@@ -176,6 +181,11 @@ static bool TrySetFieldSize(FIELD_SCHEMA& field)
             field.fieldSize = sizeof(unsigned char);
             break;
         }
+        case 'X':
+        {
+            field.fieldSize = sizeof(unsigned char);
+            break;
+        }
         default:
         {
             return false;
@@ -223,6 +233,95 @@ static RETCODE GenerateFieldHeader(FIELD_SCHEMA& field, std::ofstream& headerFil
         return RTN_FAIL;
     }
 
+    return RTN_OK;
+}
+
+static RETCODE GenerateObjectPythonFile(std::ofstream& pythonFile, OBJECT_SCHEMA& object)
+{
+    std::stringstream pythonFormat;
+    // OBJECT_FORMAT = "@format"
+    pythonFormat << std::uppercase << object.objectName << "_FORMAT = ";
+    pythonFormat << "\"@"; // native endian
+    for(const FIELD_SCHEMA& field : object.fields)
+    {
+        if(field.numElements > 1)
+        {
+            pythonFormat << field.numElements; // Add number of elements
+        }
+
+        switch(field.fieldType)
+        {
+            case 'O': // Object
+            {
+                pythonFormat << "I";
+                break;
+            }
+            case 'F': // Field
+            {
+                pythonFormat << "I";
+                break;
+            }
+            case 'R': // Record
+            {
+                pythonFormat << "I";
+                break;
+            }
+            case 'I': // Index
+            {
+                pythonFormat << "I";
+                break;
+            }
+            case 'C': // Char
+            {
+                // 's' for string. Will not allow character arrays
+                // since python can subscript easily
+                pythonFormat << ( field.numElements > 1  ? "s" : "C" );
+                break;
+            }
+            case 'N': // signed integer
+            {
+                pythonFormat << "i";
+                break;
+            }
+            case 'U': // Unsigned integer
+            {
+                pythonFormat << "I";
+                break;
+            }
+            case 'B': // Bool
+            {
+                pythonFormat << "?";
+                break;
+            }
+            case 'Y': // Unsigned char (byte)
+            {
+                pythonFormat << ( field.numElements > 1  ? "p" : "B" );
+                break;
+            }
+            case 'X':
+            {
+                // byte padding for struct alignment
+                pythonFormat << "x";
+                break;
+            }
+            default:
+            {
+                LOG_ERROR("Invalid field type: ", field.fieldName);
+                return RTN_BAD_ARG;
+            }
+        }
+    }
+
+    pythonFormat << "\"";
+
+    LOG_DEBUG("Python format for ",
+        object.objectName,
+        ": ",
+        pythonFormat.str(),
+        ", size: ",
+        object.objectSize);
+
+    pythonFile << pythonFormat.str();
     return RTN_OK;
 }
 
@@ -578,6 +677,13 @@ static RETCODE GenerateObject(const OBJECT& objectName, const std::string& skmPa
         }
     }
 
+    size_t excessBytes = out_object_entry.objectSize % sizeof(int);
+    if(excessBytes != 0)
+    {
+        LOG_WARN("Object: ", out_object_entry.objectName, " is ", excessBytes, " out of byte bounds\n Add ", sizeof(int) - excessBytes);
+        retcode |= RTN_BAD_ARG;
+    }
+
     if( schemaFile.bad() )
     {
         LOG_WARN("Error reading ", skmPath, objectName, ".skm");
@@ -597,7 +703,7 @@ static RETCODE GenerateHeaderFile(OBJECT_SCHEMA& object_entry, const std::string
     headerFile.open(header_file_path);
     if( !headerFile.is_open() )
     {
-        LOG_WARN("Could not open ", header_file_path);
+        LOG_ERROR("Could not open ", header_file_path);
         return RTN_NOT_FOUND;
     }
 
@@ -610,6 +716,24 @@ static RETCODE GenerateHeaderFile(OBJECT_SCHEMA& object_entry, const std::string
     retcode |= WriteObjectEnd(headerFile, object_entry);
 
     headerFile.close();
+
+    return retcode;
+}
+
+static RETCODE GeneratePythonFile(OBJECT_SCHEMA& object_entry, const std::string& py_file_path)
+{
+    std::ofstream pythonFile;
+    RETCODE retcode = RTN_OK;
+
+    pythonFile.open(py_file_path);
+    if( !pythonFile.is_open() )
+    {
+        LOG_ERROR("Could not open ", py_file_path);
+    }
+
+    retcode |= GenerateObjectPythonFile(pythonFile, object_entry);
+
+    pythonFile.close();
 
     return retcode;
 }
@@ -648,10 +772,19 @@ RETCODE GenerateObjectDBFiles(const OBJECT& objectName,
     retcode |= GenerateHeaderFile(object_entry, header_path.str());
     if( RTN_OK != retcode )
     {
-        LOG_WARN("Error generating ", object_entry.objectName, ".hh");
+        LOG_WARN("Error generating ", header_path.str());
         return retcode;
     }
-    LOG_INFO("Generated ", object_entry.objectName, ".hh");
+    LOG_INFO("Generated ", header_path.str());
+
+    std::stringstream python_path;
+    python_path << incPath << objectName << PY_EXT;
+    retcode |= GeneratePythonFile(object_entry, python_path.str());
+    if( RTN_OK != retcode )
+    {
+        LOG_ERROR("Error genearating", python_path.str());
+    }
+    LOG_INFO("Generated ", python_path.str());
 
 #if 0
     retcode |= GenerateDatabaseFile(object_entry, objectName, dbPath);

@@ -2,7 +2,7 @@
 #define INETMESSENGER__HH
 
 // Update version for production
-constexpr int _SERVER_VERSION = 1;
+constexpr unsigned int _SERVER_VERSION = 2;
 
 #include <retcode.hh>
 #include <OFRI.hh>
@@ -11,6 +11,9 @@ constexpr int _SERVER_VERSION = 1;
 #include <Hook.hh>
 #include "../Profiler/inc/profiler.hh"
 #include <Logger.hh>
+#include <EnvironmentVariables.hh>
+#include <Constants.hh>
+#include <MessageTypes.hh>
 
 #include <vector>
 #include <string>
@@ -31,8 +34,10 @@ constexpr int _SERVER_VERSION = 1;
 
 struct CONNECTION
 {
-    int port;
+    unsigned short port;
     char address[INET6_ADDRSTRLEN];
+
+    // port + address = 2b + 46b = 48
 
     bool operator == (const CONNECTION& other) const
     {
@@ -56,8 +61,8 @@ namespace std
 struct INET_HEADER
 {
     CONNECTION connection;
-    size_t message_size;
-    size_t data_type;
+    unsigned int message_size;
+    unsigned int data_type;
 };
 
 struct INET_PACKAGE
@@ -68,7 +73,7 @@ struct INET_PACKAGE
 
 struct ACKNOWLEDGE
 {
-    size_t server_version;
+    unsigned int server_version;
 };
 
 // get sockaddr, IPv4 or IPv6:
@@ -82,7 +87,7 @@ static void *get_in_addr(struct sockaddr *sa)
 }
 
 
-static RETCODE ReceiveAck(int socket, ACKNOWLEDGE& acknowledge)
+static RETCODE ReceiveAck(int socket)
 {
     // Timeout at 1 second to wait for recv
     struct timeval tv;
@@ -90,25 +95,34 @@ static RETCODE ReceiveAck(int socket, ACKNOWLEDGE& acknowledge)
     tv.tv_usec = 0;
     setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
 
+    INET_PACKAGE& handshake = *reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + sizeof(ACKNOWLEDGE)]);
+
     int bytes_received =
-        recv(socket, static_cast<void*>(&acknowledge), sizeof(acknowledge), 0);
+        recv(socket, static_cast<void*>(&handshake), sizeof(INET_PACKAGE) + sizeof(ACKNOWLEDGE), 0);
+
+    ACKNOWLEDGE& acknowledge =
+        *reinterpret_cast<ACKNOWLEDGE*>(handshake.payload);
 
     // Reset
     tv.tv_sec = 0;
     setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
 
-    if( sizeof(acknowledge) != bytes_received ||
+    if( sizeof(INET_PACKAGE) + sizeof(ACKNOWLEDGE) != bytes_received ||
+        handshake.header.data_type != MESSAGE_TYPE::ACK ||
         _SERVER_VERSION != acknowledge.server_version)
     {
         return RTN_CONNECTION_FAIL;
     }
 
+    delete &handshake;
+
     return RTN_OK;
 }
 
-static RETCODE SendAck(int socket, ACKNOWLEDGE& acknowledge)
+static RETCODE SendAck(int socket, INET_PACKAGE& handshake)
 {
-    if(-1 == send(socket, static_cast<void*>(&acknowledge), sizeof(acknowledge), 0))
+    handshake.header.data_type = MESSAGE_TYPE::ACK;
+    if(-1 == send(socket, static_cast<void*>(&handshake), sizeof(INET_PACKAGE) + sizeof(ACKNOWLEDGE), 0))
     {
         return RTN_CONNECTION_FAIL;
     }
@@ -135,6 +149,7 @@ public:
             INET_PACKAGE* message = reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + package->header.message_size]);
             message->header.message_size = package->header.message_size;
             message->header.connection = iter->first;
+            message->header.data_type = package->header.data_type;
             memcpy(message->payload, package->payload, message->header.message_size);
             m_SendQueue.Push(message);
         }
@@ -297,7 +312,6 @@ public:
                       accepted_address,
                       sizeof(accepted_address));
 
-            m_Address = accepted_address;
         }
 
         // Find connection address for us
@@ -334,6 +348,8 @@ public:
             LOG_ERROR("Failed to start listening on socket: ", m_TCPSocket);
             return RTN_CONNECTION_FAIL;
         }
+
+        m_Address = EnvironmentVariable::Instance().Get(KDB_INET_ADDRESS);
 
         CONNECTION self_connection;
         strncpy(self_connection.address, m_Address.c_str(), sizeof(self_connection.address));
@@ -416,9 +432,16 @@ public:
         // We must send CLIENT_TO_SERVER, but we make requests on what type
         ACKNOWLEDGE ack = {_SERVER_VERSION};
         CONNECTION conn = {0, '\0'};
+        INET_PACKAGE& handshake = *reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + sizeof(ACKNOWLEDGE)]);
+        memcpy(handshake.header.connection.address,
+            m_Address.c_str(),
+            sizeof(handshake.header.connection.address));
+        handshake.header.connection.port = m_PollFD;
+        handshake.header.message_size = sizeof(ACKNOWLEDGE);
+        memcpy(handshake.payload, &ack, sizeof(ACKNOWLEDGE)); 
 
         // Send our server version to server to match
-        RETCODE retcode = SendAck(connectedSocket, ack);
+        RETCODE retcode = SendAck(connectedSocket, handshake);
         if(RTN_OK == retcode)
         {
             // Non-block set for smooth receives and sends
@@ -441,6 +464,7 @@ public:
                 port);
         }
 
+        delete &handshake;
         return retcode;
     }
 
@@ -465,7 +489,6 @@ public:
         int err;
         ssize_t recv_ret;
         INET_HEADER inet_header = {};
-        char* payload = nullptr;
         const uint32_t err_mask = EPOLLERR | EPOLLHUP;
 
         // Need to get connection that matches fd to call disconnect delegate
@@ -491,27 +514,29 @@ public:
             }
 
             /* Error */
-            LOG_WARN("Error receving data from socket: ", fd);
+            LOG_WARN("Error receving data from connection: ", m_FDMap[fd].address, ":", " errorno: ", strerror(errno));
             RemoveConnection(fd, connection);
             return RTN_CONNECTION_FAIL;
         }
 
-        int remaining_message = inet_header.message_size;
-        INET_PACKAGE* package = reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + remaining_message]);
-        memcpy(&(package->header), &inet_header, sizeof(INET_HEADER));
+        INET_PACKAGE* package = reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + inet_header.message_size]);
+        memcpy(&(package->header.connection), &m_FDMap[fd], sizeof(CONNECTION));
+        package->header.message_size = inet_header.message_size;
+        package->header.data_type = inet_header.data_type;
+        int remaining_message = package->header.message_size;
 
         while(0 < (recv_ret = recv(fd, package->payload + inet_header.message_size - remaining_message, remaining_message, 0)))
         {
             remaining_message -= recv_ret;
         }
 
-        if (recv_ret < 0)
+        if (remaining_message != 0)
         {
             err = errno;
             if (err != EAGAIN)
             {
                 /* Error */
-                LOG_WARN("Error receving data from socket: ", fd);
+                LOG_WARN("Error receving data from connection: ", package->header.connection.address, " errono: ", strerror(errno));
                 RemoveConnection(fd, connection);
                 return RTN_CONNECTION_FAIL;
             }
@@ -577,9 +602,9 @@ public:
                 accepted_address, sizeof(accepted_address));
 
             // Wait for client to send ack
-            retcode = ReceiveAck(accept_socket, acknowledge);
+            retcode = ReceiveAck(accept_socket);
 
-            if(RTN_OK == retcode && _SERVER_VERSION == acknowledge.server_version)
+            if(RTN_OK == retcode)
             {
                 memcpy(connection.address, accepted_address, sizeof(connection.address));
                 std::stringstream portstream(m_Port);
