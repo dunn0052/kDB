@@ -1,5 +1,5 @@
-#ifndef __ENVIRONMENT_VARIABLES_HH
-#define __ENVIRONMENT_VARIABLES_HH
+#ifndef __CONFIG_VARIABLES_HH
+#define __CONFIG_VARIABLES_HH
 
 #include <Logger.hh>
 #include <unordered_map>

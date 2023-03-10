@@ -10,7 +10,7 @@ static bool g_process_is_running = true;
 static TasQ<INET_PACKAGE*> g_outgoing_changes;
 static TasQ<INET_PACKAGE*> g_incoming_changes;
 
-static void quit_signal(int sig)
+static void quitSignal(int sig)
 {
     // strsignal is not MT-safe
     char signal_text[64];
@@ -19,12 +19,12 @@ static void quit_signal(int sig)
     g_process_is_running = false;
 }
 
-static void client_connect(const CONNECTION& connection)
+static void clientConnect(const CONNECTION& connection)
 {
     LOG_INFO("Client ", connection.address, ":", connection.port, " connected" );
 }
 
-static void client_disconnect(const CONNECTION& connection)
+static void clientDisconnect(const CONNECTION& connection)
 {
     LOG_INFO("Client ", connection.address, ":", connection.port, " disconnected" );
 }
@@ -59,8 +59,8 @@ static void ClientRequest(const INET_PACKAGE* package)
 
 int main(int argc, char* argv[])
 {
-    signal(SIGQUIT, quit_signal);
-    signal(SIGINT, quit_signal);
+    signal(SIGQUIT, quitSignal);
+    signal(SIGINT, quitSignal);
     CLI::Parser parse("UpdateDaemon", "Manages reading and writing of DBs");
     CLI::CLI_StringArgument portArg("-p", "Connection port for DBUpdate");
     CLI::CLI_FlagArgument helpArg("-h", "Shows usage", false);
@@ -87,8 +87,8 @@ int main(int argc, char* argv[])
     LOG_INFO("Connection on ", connection.GetTCPAddress(), ":", connection.GetTCPPort());
 
     connection.m_OnReceive += ClientRequest;
-    connection.m_OnClientConnect += client_connect;
-    connection.m_OnDisconnect += client_disconnect;
+    connection.m_OnClientConnect += clientConnect;
+    connection.m_OnDisconnect += clientDisconnect;
 
     std::chrono::time_point start = std::chrono::steady_clock::now();
 

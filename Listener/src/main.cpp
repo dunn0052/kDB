@@ -8,7 +8,7 @@
 
 static bool running = true;
 
-static void quit_signal(int sig)
+static void quitSignal(int sig)
 {
     LOG_INFO("Signal ", sig, " caught!");
     running = false;
@@ -102,8 +102,8 @@ class WriteThread: public DaemonThread<TasQ<INET_PACKAGE*>*>
 
 int main(int argc, char* argv[])
 {
-    signal(SIGQUIT, quit_signal);
-    signal(SIGINT, quit_signal);
+    signal(SIGQUIT, quitSignal);
+    signal(SIGINT, quitSignal);
     CLI::Parser parse("Listener", "Listen for database updates");
     CLI::CLI_StringArgument connectionAddressArg("-c", "Connection address for Other", false);
     CLI::CLI_StringArgument connectionPortArg("-p", "Connection port for Other", false);

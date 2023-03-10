@@ -1,7 +1,7 @@
 #include <schema.hh>
 #include <CLI.hh>
 #include <Constants.hh>
-#include <EnvironmentVariables.hh>
+#include <ConfigValues.hh>
 
 class CLI_DatabaseArgs : public CLI::CLI_Argument<OBJECT, 1, 1>
 {
