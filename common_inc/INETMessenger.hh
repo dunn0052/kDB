@@ -349,7 +349,7 @@ public:
             return RTN_CONNECTION_FAIL;
         }
 
-        m_Address = EnvironmentVariable::Instance().Get(KDB_INET_ADDRESS);
+        m_Address = ConfigValues::Instance().Get(KDB_INET_ADDRESS);
 
         CONNECTION self_connection;
         strncpy(self_connection.address, m_Address.c_str(), sizeof(self_connection.address));
@@ -453,12 +453,13 @@ public:
             memcpy(conn.address, accepted_address, sizeof(conn.address));
             std::stringstream portstream(port);
             portstream >> conn.port;
-            AddConnection(connectedSocket, conn, EPOLLIN | EPOLLPRI);
+            retcode |= AddConnection(connectedSocket, conn, EPOLLIN | EPOLLPRI);
         }
-        else
+
+        if(RTN_OK != retcode)
         {
             LOG_WARN(
-                "Failed sending acknowledgement to server: ",
+                "Failed to add: ",
                 address,
                 " on port: ",
                 port);
@@ -670,6 +671,11 @@ public:
 
     RETCODE AddConnection(int fd, const CONNECTION& connection, uint32_t events)
     {
+        if(m_ConnectionMap.find(connection) != m_ConnectionMap.end())
+        {
+            return RTN_CONNECTION_FAIL;
+        }
+
         RETCODE retcode = AddFDToPoll(fd, events);
 
         m_ConnectionMap[connection] = fd;

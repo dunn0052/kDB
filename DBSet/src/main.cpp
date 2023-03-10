@@ -20,35 +20,18 @@ static RETCODE ReadDBValue(OFRI& ofri, std::string& value)
 
 int main(int argc, char* argv[])
 {
-    CLI::Parser parse("DBSet", "Update value in object");
-    CLI::CLI_OBJECTArgument objectArg("-o", "Object name", true);
-    CLI::CLI_IntArgument fieldArg("-f", "Field number in object", true);
-    CLI::CLI_IntArgument recordArg("-r", "Record number", true);
-    CLI::CLI_IntArgument indexArg("-i", "Index of field");
-    CLI::CLI_StringArgument valueArg("-v", "Value update");
+    CLI::Parser parse("DBSet", "Update value in object.");
+    CLI::CLI_OFRIArgument ofriArg("--ofri", "OBJECT.0.0.0", true);
+    CLI::CLI_StringArgument valueArg("=", "Value update");
 
     parse
-        .AddArg(objectArg)
-        .AddArg(fieldArg)
-        .AddArg(recordArg)
-        .AddArg(indexArg)
-        .AddArg(valueArg);
+        .AddArg(valueArg)
+        .AddArg(ofriArg);
 
     RETCODE retcode = parse.ParseCommandLineArguments(argc, argv);
     if(IS_RETCODE_OK(retcode))
     {
-        OFRI ofri = {0};
-        strncpy(ofri.o, objectArg.GetValue(), sizeof(ofri.o));
-        ofri.f = fieldArg.GetValue();
-        ofri.r = recordArg.GetValue();
-        if(indexArg.IsInUse())
-        {
-            ofri.i = indexArg.GetValue();
-        }
-        else
-        {
-            ofri.i = 0;
-        }
+        OFRI ofri = ofriArg.GetValue();
 
         if(valueArg.IsInUse())
         {
@@ -75,6 +58,13 @@ int main(int argc, char* argv[])
                 LOG_INFO("Failed to read ", ofri.o, ".", ofri.f, ".", ofri.r, ".", ofri.i);
             }
         }
+        
+    }
+    else
+    {
+        parse.Usage();
+        retcode |= RTN_FAIL;
     }
 
+    return retcode;
 }

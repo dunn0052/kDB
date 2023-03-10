@@ -1,6 +1,6 @@
 #! /usr/bin/bash
 
-source environment/kdb_env
+source config/.kdb_env
 
 ./vendor/premake/rpi/premake5 --scripts=./vendor/premake/cmake/ cmake
 

@@ -65,7 +65,7 @@ int main(int argc, char* argv[])
     {
         RETCODE retcode = RTN_OK;
         std::string INSTALL_DIR =
-            EnvironmentVariable::Instance().Get(KDB_INSTALL_DIR);
+            ConfigValues::Instance().Get(KDB_INSTALL_DIR);
         if("" == INSTALL_DIR)
         {
             return RTN_NOT_FOUND;
@@ -85,7 +85,7 @@ int main(int argc, char* argv[])
     {
         RETCODE retcode = RTN_OK;
         std::string INSTALL_DIR =
-            EnvironmentVariable::Instance().Get(KDB_INSTALL_DIR);
+            ConfigValues::Instance().Get(KDB_INSTALL_DIR);
         if("" == INSTALL_DIR)
         {
             return RTN_NOT_FOUND;

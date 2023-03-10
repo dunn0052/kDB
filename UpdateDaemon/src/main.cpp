@@ -62,7 +62,7 @@ int main(int argc, char* argv[])
     signal(SIGQUIT, quit_signal);
     signal(SIGINT, quit_signal);
     CLI::Parser parse("UpdateDaemon", "Manages reading and writing of DBs");
-    CLI::CLI_StringArgument portArg("-p", "Connection port for DBUpdate", true);
+    CLI::CLI_StringArgument portArg("-p", "Connection port for DBUpdate");
     CLI::CLI_FlagArgument helpArg("-h", "Shows usage", false);
 
     parse.AddArg(portArg)
@@ -75,6 +75,9 @@ int main(int argc, char* argv[])
         parse.Usage();
         return retcode;
     }
+
+    std::string port = portArg.IsInUse() ?
+        portArg.GetValue() : ConfigValues::Instance().Get(KDB_INET_PORT);
 
     MonitorThread monitor;
     monitor.Start(&g_incoming_changes, &g_outgoing_changes);

@@ -186,5 +186,13 @@ int main(int argc, char* argv[])
         {
             LOG_WARN("Failed -- exiting!");
         }
+
+        return retcode;
     }
+    else
+    {
+        parse.Usage();
+    }
+
+    return parseRetcode;
 }

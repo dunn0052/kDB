@@ -97,6 +97,11 @@ static bool TryGenerateDataType(FIELD_SCHEMA& field, std::string& dataType)
             dataType = "char";
             break;
         }
+        case 'S': // String
+        {
+            dataType = "char";
+            break;
+        }
         case 'N': // signed integer
         {
             dataType = "int";
@@ -157,6 +162,11 @@ static bool TrySetFieldSize(FIELD_SCHEMA& field)
             break;
         }
         case 'C': // Char
+        {
+            field.fieldSize = sizeof(char);
+            break;
+        }
+        case 'S': //String
         {
             field.fieldSize = sizeof(char);
             break;
@@ -236,72 +246,101 @@ static RETCODE GenerateFieldHeader(FIELD_SCHEMA& field, std::ofstream& headerFil
     return RTN_OK;
 }
 
+/*
+    OBJECT.py
+    class OBJECT:
+        
+        FORMAT = "C struct format"
+
+        def __init__(self, member:type, member2:type, etc...):
+            self.member = member
+            self.member2 = member2
+
+        def __str__(self):
+            return f"member: {str(self.member)} member2:{str(self.member2)} etc..."
+*/
 static RETCODE GenerateObjectPythonFile(std::ofstream& pythonFile, OBJECT_SCHEMA& object)
 {
-    std::stringstream pythonFormat;
-    // OBJECT_FORMAT = "@format"
-    pythonFormat << std::uppercase << object.objectName << "_FORMAT = ";
-    pythonFormat << "\"@"; // native endian
+    std::stringstream format;
+    std::stringstream classDefine;
+    std::stringstream classInitFunc;
+    std::stringstream classVariables;
+    std::stringstream strFunc;
+
+    classDefine << "# THIS FILE WAS GENERATED. DO NOT MODIFY!\n\n";
+    classDefine << "class " << std::uppercase << object.objectName << ":\n";
+    classInitFunc << "    def __init__(self";
+    strFunc << "\n\n    def __str__(self) -> str:\n";
+    strFunc << "        return f\"";
+    // OBJECT_FORMAT = "format"
+    format << "\n    FORMAT = \"";
     for(const FIELD_SCHEMA& field : object.fields)
     {
+        classInitFunc << ", " << field.fieldName;
+        classVariables << "        self." << field.fieldName
+                       << " = " << field.fieldName << "\n";
+
+        strFunc << field.fieldName << ": {self." << field.fieldName << "} ";
+
         if(field.numElements > 1)
         {
-            pythonFormat << field.numElements; // Add number of elements
+            format << field.numElements; // Add number of elements
         }
 
         switch(field.fieldType)
         {
             case 'O': // Object
             {
-                pythonFormat << "I";
+                format << "20s";
+                classInitFunc << ":str";
                 break;
             }
             case 'F': // Field
-            {
-                pythonFormat << "I";
-                break;
-            }
             case 'R': // Record
-            {
-                pythonFormat << "I";
-                break;
-            }
             case 'I': // Index
+            case 'U': // Unsigned integer
             {
-                pythonFormat << "I";
+                format << "I";
+                classInitFunc << ":int";
                 break;
             }
             case 'C': // Char
             {
                 // 's' for string. Will not allow character arrays
                 // since python can subscript easily
-                pythonFormat << ( field.numElements > 1  ? "s" : "C" );
+                format << "C";
+                classInitFunc << ":str";
+                break;
+            }
+            case 'S': // String
+            {
+                format << "s";
+                classInitFunc << ":str";
                 break;
             }
             case 'N': // signed integer
             {
-                pythonFormat << "i";
-                break;
-            }
-            case 'U': // Unsigned integer
-            {
-                pythonFormat << "I";
+                format << "i";
+                classInitFunc << ":int";
                 break;
             }
             case 'B': // Bool
             {
-                pythonFormat << "?";
+                format << "?";
+                classInitFunc << ":bool";
                 break;
             }
             case 'Y': // Unsigned char (byte)
             {
-                pythonFormat << ( field.numElements > 1  ? "p" : "B" );
+                format << ( field.numElements > 1  ? "p" : "B" );
+                classInitFunc << ":bytes";
                 break;
             }
             case 'X':
             {
                 // byte padding for struct alignment
-                pythonFormat << "x";
+                format << "x";
+                classInitFunc << ":bytes";
                 break;
             }
             default:
@@ -312,16 +351,13 @@ static RETCODE GenerateObjectPythonFile(std::ofstream& pythonFile, OBJECT_SCHEMA
         }
     }
 
-    pythonFormat << "\"";
+    format << "\"\n\n";
+    classInitFunc << "):\n";
+    strFunc << "\"";
 
-    LOG_DEBUG("Python format for ",
-        object.objectName,
-        ": ",
-        pythonFormat.str(),
-        ", size: ",
-        object.objectSize);
-
-    pythonFile << pythonFormat.str();
+    pythonFile << classDefine.str() << format.str()
+               << classInitFunc.str() << classVariables.str()
+               << strFunc.str();
     return RTN_OK;
 }
 
@@ -422,7 +458,7 @@ static RETCODE readAllDBHeader(OBJECT_SCHEMA& object_entry, std::vector<std::str
     std::ifstream headerStream;
     std::stringstream allDBHeaderPath;
     std::string INSTALL_DIR =
-        EnvironmentVariable::Instance().Get(KDB_INSTALL_DIR);
+        ConfigValues::Instance().Get(KDB_INSTALL_DIR);
     if("" == INSTALL_DIR)
     {
         return RTN_NOT_FOUND;
@@ -474,7 +510,7 @@ static RETCODE writeAllDBHeader(std::vector<std::string>& out_lines)
 {
     std::stringstream allDBHeaderPath;
     std::string INSTALL_DIR =
-        EnvironmentVariable::Instance().Get(KDB_INSTALL_DIR);
+        ConfigValues::Instance().Get(KDB_INSTALL_DIR);
     if("" == INSTALL_DIR)
     {
         return RTN_NOT_FOUND;
@@ -505,6 +541,96 @@ static RETCODE writeAllDBHeader(std::vector<std::string>& out_lines)
 }
 
 
+static RETCODE readAllDBPy(OBJECT_SCHEMA& object_entry, std::vector<std::string>& out_lines)
+{
+    std::string line;
+    bool entry_replaced = false;
+    size_t lineNum = 1;
+    std::ifstream pyStream;
+    std::stringstream allDBPyPath;
+    std::string INSTALL_DIR =
+        ConfigValues::Instance().Get(KDB_INSTALL_DIR);
+    if("" == INSTALL_DIR)
+    {
+        return RTN_NOT_FOUND;
+    }
+    allDBPyPath
+        << INSTALL_DIR
+        << PYTHON_API_PATH
+        << ALL_DB_HEADER_NAME
+        << PY_EXT;
+
+    pyStream.open(allDBPyPath.str(),
+        std::fstream::in | std::fstream::out | std::fstream::app);
+
+    if( !pyStream.is_open() )
+    {
+        LOG_WARN("Could not open up ", allDBPyPath.str(), " for reading!");
+        return RTN_NOT_FOUND;
+    }
+
+    // Update entry
+    while( std::getline(pyStream, line) )
+    {
+        if( object_entry.objectNumber == lineNum )
+        {
+            line = "import PythonAPI.db." + object_entry.objectName;
+            entry_replaced = true;
+        }
+        out_lines.push_back(line);
+        lineNum++;
+    }
+
+    // New entry that extends the number of lines in the header
+    if( !entry_replaced )
+    {
+        for(; lineNum != object_entry.objectNumber; ++lineNum)
+        {
+            out_lines.push_back("");
+        }
+
+        out_lines.push_back("import PythonAPI.db." +  object_entry.objectName);
+    }
+
+    pyStream.close();
+
+    return RTN_OK;
+}
+
+static RETCODE writeAllDBPy(std::vector<std::string>& out_lines)
+{
+    std::stringstream allDBHeaderPath;
+    std::string INSTALL_DIR =
+        ConfigValues::Instance().Get(KDB_INSTALL_DIR);
+    if("" == INSTALL_DIR)
+    {
+        return RTN_NOT_FOUND;
+    }
+    allDBHeaderPath
+        << INSTALL_DIR
+        << PYTHON_API_PATH
+        << ALL_DB_HEADER_NAME
+        << PY_EXT;
+
+    std::ofstream headerStream;
+    headerStream.open(allDBHeaderPath.str());
+
+    if( !headerStream.is_open() )
+    {
+        LOG_WARN("Could not open up ", allDBHeaderPath.str(), " for writing");
+        return RTN_NOT_FOUND;
+    }
+
+    for( std::string& line : out_lines)
+    {
+        headerStream << line << "\n";
+    }
+
+    headerStream.close();
+
+    return RTN_OK;
+}
+
 static RETCODE AddToAllDBHeader(OBJECT_SCHEMA& object_entry)
 {
     std::vector<std::string> out_lines;
@@ -516,11 +642,22 @@ static RETCODE AddToAllDBHeader(OBJECT_SCHEMA& object_entry)
     return RTN_OK;
 }
 
+static RETCODE AddToAllDBPy(OBJECT_SCHEMA& object_entry)
+{
+    std::vector<std::string> out_lines;
+
+    RETURN_RETCODE_IF_NOT_OK(readAllDBPy(object_entry, out_lines));
+
+    RETURN_RETCODE_IF_NOT_OK(writeAllDBPy(out_lines));
+
+    return RTN_OK;    
+}
+
 static RETCODE OpenDBMapFile(std::ofstream& headerStream)
 {
     std::stringstream dbMapHeaderPath;
     std::string INSTALL_DIR =
-        EnvironmentVariable::Instance().Get(KDB_INSTALL_DIR);
+        ConfigValues::Instance().Get(KDB_INSTALL_DIR);
     if("" == INSTALL_DIR)
     {
         return RTN_NOT_FOUND;
@@ -543,6 +680,33 @@ static RETCODE OpenDBMapFile(std::ofstream& headerStream)
     return RTN_OK;
 }
 
+static RETCODE OpenDBMapPyFile(std::ofstream& headerStream)
+{
+    std::stringstream dbMapPyPath;
+    std::string INSTALL_DIR =
+        ConfigValues::Instance().Get(KDB_INSTALL_DIR);
+    if("" == INSTALL_DIR)
+    {
+        return RTN_NOT_FOUND;
+    }
+    dbMapPyPath
+        << INSTALL_DIR
+        << PYTHON_API_PATH
+        << DB_MAP_HEADER_NAME
+        << PY_EXT;
+
+    headerStream.open(dbMapPyPath.str(),
+        std::fstream::in | std::fstream::out | std::fstream::trunc);
+
+    if( !headerStream.is_open() )
+    {
+        LOG_WARN("Could not open up ", dbMapPyPath.str(), " for writing");
+        return RTN_NOT_FOUND;
+    }
+
+    return RTN_OK;
+}
+
 static RETCODE WriteDBMapHeader(std::ofstream& headerStream)
 {
     headerStream << "//GENERATED FILE! DO NOT MODIFY\n";
@@ -558,10 +722,25 @@ static RETCODE WriteDBMapHeader(std::ofstream& headerStream)
 
 }
 
+static RETCODE WriteDBMapPyHeader(std::ofstream& headerStream)
+{
+    // DBMap.py contains a dictionary of all DB objects
+    headerStream << "#GENERATED FILE! DO NOT MODIFY\n";
+
+    headerStream <<
+        "import PythonAPI.allDBs as allDBs\n\n";
+
+    headerStream <<
+        "ALL_OBJECTS = {";
+
+    return RTN_OK;
+
+}
+
 static RETCODE WriteDBMapObject(std::ofstream& headerStream, const OBJECT_SCHEMA& object_entry)
 {
     std::stringstream upperCaseSStream;
-    upperCaseSStream << std::uppercase << std::string(object_entry.objectName);
+    upperCaseSStream << std::uppercase << object_entry.objectName;
     const std::string& objName = upperCaseSStream.str();
     headerStream
         << "\n        {"
@@ -570,6 +749,18 @@ static RETCODE WriteDBMapObject(std::ofstream& headerStream, const OBJECT_SCHEMA
         << "_NAME, O_"
         << objName
         << "_INFO},";
+
+    return RTN_OK;
+}
+
+static RETCODE WriteDBMapPyObject(std::ofstream& pyStream, const OBJECT_SCHEMA& object_entry)
+{
+    // "OBJECT":allDBs.PythonAPI.db.OBJECT.OBJEC,
+    std::stringstream upperCaseSStream;
+    upperCaseSStream << std::uppercase << object_entry.objectName;
+    const std::string& objName = upperCaseSStream.str();
+    pyStream
+        << "\n    \"" << objName << "\":allDBs.PythonAPI.db." << objName << "." << objName << ",";
 
     return RTN_OK;
 }
@@ -592,6 +783,13 @@ static RETCODE WriteDBMapFooter(std::ofstream& headerStream)
         <<"}\n";
 
     headerStream << "\n#endif";
+
+    return RTN_OK;
+}
+
+static RETCODE WriteDBMapPyFooter(std::ofstream& pyStream)
+{
+    pyStream << "\n}";
 
     return RTN_OK;
 }
@@ -757,7 +955,9 @@ static RETCODE GeneratePythonFile(OBJECT_SCHEMA& object_entry, const std::string
 RETCODE GenerateObjectDBFiles(const OBJECT& objectName,
     const std::string& skmPath,
     const std::string& incPath,
-    std::ofstream& dbMapStream)
+    const std::string& pyPath,
+    std::ofstream& dbMapStream,
+    std::ofstream& dbMapPyStream)
 {
     OBJECT_SCHEMA object_entry;
     RETCODE retcode = GenerateObject(objectName, skmPath, object_entry);
@@ -778,7 +978,7 @@ RETCODE GenerateObjectDBFiles(const OBJECT& objectName,
     LOG_INFO("Generated ", header_path.str());
 
     std::stringstream python_path;
-    python_path << incPath << objectName << PY_EXT;
+    python_path << pyPath << objectName << PY_EXT;
     retcode |= GeneratePythonFile(object_entry, python_path.str());
     if( RTN_OK != retcode )
     {
@@ -786,17 +986,32 @@ RETCODE GenerateObjectDBFiles(const OBJECT& objectName,
     }
     LOG_INFO("Generated ", python_path.str());
 
-#if 0
-    retcode |= GenerateDatabaseFile(object_entry, objectName, dbPath);
-    if( RTN_OK != retcode )
+    std::string INSTALL_DIR =
+        ConfigValues::Instance().Get(KDB_INSTALL_DIR);
+    if("" != INSTALL_DIR)
     {
-                LOG_WARN("Error generating ", object_entry.objectName, ".db");
-        return retcode;
+        retcode |= GenerateDatabaseFile(object_entry, objectName, INSTALL_DIR + DB_DB_DIR);
+        if( RTN_OK != retcode )
+        {
+            LOG_WARN("Error generating ", object_entry.objectName, DB_EXT);
+            return retcode;
+        }
+        LOG_INFO("Generated ", object_entry.objectName, DB_EXT);
     }
-    LOG_INFO("Generated ", object_entry.objectName, ".db");
-#endif
+    else
+    {
+        LOG_WARN("Error generating ", object_entry.objectName, DB_EXT);
+    }
 
     retcode |= AddToAllDBHeader(object_entry);
+    if( RTN_OK != retcode )
+    {
+        LOG_WARN("Error adding ", object_entry.objectName, " to allHeader.hh");
+        return retcode;
+    }
+    LOG_INFO("Added ", object_entry.objectName, " to allHeader.hh");
+
+    retcode |= AddToAllDBPy(object_entry);
     if( RTN_OK != retcode )
     {
         LOG_WARN("Error adding ", object_entry.objectName, " to allHeader.hh");
@@ -808,6 +1023,13 @@ RETCODE GenerateObjectDBFiles(const OBJECT& objectName,
     if( RTN_OK != retcode )
     {
         LOG_WARN("Error adding ", object_entry.objectName, " to DBMap.hh");
+        return retcode;
+    }
+
+    retcode |= WriteDBMapPyObject(dbMapPyStream, object_entry);
+    if(RTN_OK != retcode )
+    {
+        LOG_WARN("Error adding ", object_entry.objectName, " to DBMap.py");
         return retcode;
     }
 
@@ -841,7 +1063,7 @@ RETCODE GetSchemaFileObjectName(const std::string& skmFileName, std::string& out
     return RTN_NOT_FOUND;
 }
 
-RETCODE GenerateAllDBFiles(const std::string& skmPath, const std::string& incPath)
+RETCODE GenerateAllDBFiles(const std::string& skmPath, const std::string& incPath, const std::string& pyPath)
 {
     RETCODE retcode = RTN_OK;
     std::vector<std::string> schema_files;
@@ -880,14 +1102,28 @@ RETCODE GenerateAllDBFiles(const std::string& skmPath, const std::string& incPat
         retcode |= OpenDBMapFile(dbMapStream);
         if( RTN_OK != retcode )
         {
-            LOG_WARN("Error opening DBMap.hh");
+            LOG_WARN("Error opening ", DB_MAP_HEADER_NAME, HEADER_EXT);
             return retcode;
         }
 
         retcode |= WriteDBMapHeader(dbMapStream);
         if( RTN_OK != retcode )
         {
-            LOG_WARN("Error writing DBMap.hh header");
+            LOG_WARN("Error writing ", DB_MAP_HEADER_NAME, HEADER_EXT);
+            return retcode;
+        }
+
+        std::ofstream dbMapPyStream;
+        retcode |= OpenDBMapPyFile(dbMapPyStream);
+        if( RTN_OK != retcode )
+        {
+            LOG_WARN("Error opening ", DB_MAP_HEADER_NAME, PY_EXT);
+        }
+
+        retcode |= WriteDBMapPyHeader(dbMapPyStream);
+        if( RTN_OK != retcode )
+        {
+            LOG_WARN("Error writing ", DB_MAP_HEADER_NAME, PY_EXT);
             return retcode;
         }
 
@@ -895,16 +1131,25 @@ RETCODE GenerateAllDBFiles(const std::string& skmPath, const std::string& incPat
         {
             OBJECT objName = {0};
             strncpy(objName, schema.c_str(), sizeof(objName));
-            retcode |= GenerateObjectDBFiles(objName, skmPath, incPath, dbMapStream);
+            retcode |= GenerateObjectDBFiles(objName, skmPath, incPath,
+                pyPath, dbMapStream, dbMapPyStream);
         }
 
         retcode |= WriteDBMapFooter(dbMapStream);
         if( RTN_OK != retcode )
         {
-            LOG_WARN("Error writing DBMap.hh header");
+            LOG_WARN("Error writing ", DB_MAP_HEADER_NAME, HEADER_EXT);
             return retcode;
         }
-        LOG_INFO("Generated DBMap.hh");
+        LOG_INFO("Generated ", DB_MAP_HEADER_NAME, HEADER_EXT);
+
+        retcode |= WriteDBMapPyFooter(dbMapPyStream);
+        if( RTN_OK != retcode )
+        {
+            LOG_WARN("Error writing ", DB_MAP_HEADER_NAME, PY_EXT);
+            return retcode;
+        }
+        LOG_INFO("Generated ", DB_MAP_HEADER_NAME, HEADER_EXT);
 
         return retcode;
     }
