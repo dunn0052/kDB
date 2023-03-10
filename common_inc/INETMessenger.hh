@@ -11,7 +11,7 @@ constexpr unsigned int _SERVER_VERSION = 2;
 #include <Hook.hh>
 #include "../Profiler/inc/profiler.hh"
 #include <Logger.hh>
-#include <EnvironmentVariables.hh>
+#include <ConfigValues.hh>
 #include <Constants.hh>
 #include <MessageTypes.hh>
 

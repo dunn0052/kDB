@@ -5,7 +5,7 @@
 #include <Constants.hh>
 #include <dirent.h>
 #include <bits/stdc++.h>
-#include <EnvironmentVariables.hh>
+#include <ConfigValues.hh>
 
 /* Object info */
 RETCODE ParseObjectEntry(std::istringstream& line, OBJECT_SCHEMA& out_object)

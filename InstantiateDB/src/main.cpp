@@ -7,7 +7,7 @@
 #include <sstream>
 #include <string>
 #include <Logger.hh>
-#include <EnvironmentVariables.hh>
+#include <ConfigValues.hh>
 
 static RETCODE GenerateDatabaseFile(const OBJECT& object_name, const std::string& dbPath)
 {
