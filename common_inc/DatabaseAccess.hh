@@ -96,26 +96,33 @@ class DatabaseAccess
                 return RTN_NULL_OBJ;
             }
 
+            if(ofri.i > m_Object.fields[ofri.f].numElements - 1)
+            {
+                return RTN_NULL_OBJ;
+            }
+
             switch(m_Object.fields[ofri.f].fieldType)
             {
-                case 'D': // Databse innacurate because its a string alias
+                case 'O': // Object
                 {
-                    if(value.size() > m_Object.fields[ofri.f].numElements)
+                    if(value.size() > OBJECT_NAME_LEN)
                     {
                         return RTN_BAD_ARG;
                     }
 
+                    memset(p_value, 0, OBJECT_NAME_LEN);
                     strncpy(static_cast<char*>(p_value),
                         value.c_str(), value.size());
                     break;
                 }
-                case 'O': // Object
+                case 'S': // String
                 {
-                    if(value.size() > m_Object.fields[ofri.f].numElements)
+                    if(value.size() > sizeof(char*) * m_Object.fields[ofri.f].numElements)
                     {
                         return RTN_BAD_ARG;
                     }
 
+                    memset(p_value, 0, sizeof(char*) * m_Object.fields[ofri.f].numElements);
                     strncpy(static_cast<char*>(p_value),
                         value.c_str(), value.size());
                     break;
@@ -123,12 +130,12 @@ class DatabaseAccess
                 case 'C': // Char
                 case 'Y': // Unsigned char (byte)
                 {
-                    if(value.size() > m_Object.fields[ofri.f].numElements)
+                    if(value.size() > 1)
                     {
                         return RTN_BAD_ARG;
                     }
 
-                    memcpy(p_value, value.c_str(), value.size());
+                    *static_cast<char*>(p_value) = value.c_str()[0];
                     break;
                 }
                 case 'N': // signed integer
@@ -147,12 +154,12 @@ class DatabaseAccess
                 case 'I': // Index
                 case 'U': // Unsigned integer
                 {
-                    size_t int_val = static_cast<size_t>(atol(value.c_str()));
+                    unsigned int int_val = static_cast<unsigned int>(atol(value.c_str()));
                     if(0 == int_val and "0" != value.c_str())
                     {
                         return RTN_BAD_ARG;
                     }
-                    *static_cast<size_t*>(p_value) = int_val;
+                    *static_cast<unsigned int*>(p_value) = int_val;
                     break;
                 }
                 case 'B': // Bool
@@ -160,6 +167,7 @@ class DatabaseAccess
                     std::stringstream value_buffer;
                     value_buffer << std::uppercase << value;
                     bool bool_val = true;
+
                     if("FALSE" == value_buffer.str() or
                         "0" == value_buffer.str())
                     {
@@ -174,6 +182,7 @@ class DatabaseAccess
                     {
                         return RTN_BAD_ARG;
                     }
+                    
                     break;
                 }
                 default:
@@ -193,6 +202,11 @@ class DatabaseAccess
                 return RTN_NULL_OBJ;
             }
 
+            if(ofri.i > m_Object.fields[ofri.f].numElements - 1)
+            {
+                return RTN_NULL_OBJ;
+            }
+
             std::stringstream db_value;
             switch(m_Object.fields[ofri.f].fieldType)
             {
@@ -201,8 +215,17 @@ class DatabaseAccess
                     db_value << *static_cast<OBJECT*>(p_value);
                     break;
                 }
-                case 'C': // Char
                 case 'Y': // Unsigned char (byte)
+                {
+                    db_value << *static_cast<unsigned char*>(p_value);
+                    break;
+                }
+                case 'C': // Char
+                {
+                    db_value << *static_cast<char*>(p_value);
+                    break;
+                }
+                case 'S': // String
                 {
                     db_value.rdbuf()->sputn(reinterpret_cast<char*>(p_value),
                         sizeof(char) * m_Object.fields[ofri.f].numElements);
@@ -218,7 +241,7 @@ class DatabaseAccess
                 case 'I': // Index
                 case 'U': // Unsigned integer
                 {
-                    db_value << *static_cast<size_t*>(p_value);
+                    db_value << *static_cast<unsigned int*>(p_value);
                     break;
                 }
                 case 'B': // Bool
@@ -230,6 +253,14 @@ class DatabaseAccess
                 {
                     return RTN_BAD_ARG;
                 }
+            }
+
+            if(!db_value.good())
+            {
+                LOG_WARN("Schema error for: ", ofri.o,
+                         " could not convert field: ", ofri.f, " to: ",
+                         m_Object.fields[ofri.f].fieldType);
+                return RTN_NULL_OBJ;
             }
 
             value = db_value.str();
@@ -305,7 +336,7 @@ class DatabaseAccess
         {
             std::stringstream filepath;
             std::string INSTALL_DIR =
-                EnvironmentVariable::Instance().Get(KDB_INSTALL_DIR);
+                ConfigValues::Instance().Get(KDB_INSTALL_DIR);
             if("" == INSTALL_DIR)
             {
                 return -1;

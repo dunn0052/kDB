@@ -55,9 +55,14 @@ CMakeFiles/
 #database
 db/inc/*
 db/db/*
+PythonAPI/db/*
 *.db
+
+#generated db access
 common_inc/allDBs.hh
 common_inc/DBMap.hh
+PythonAPI/allDBs.py
+PythonAPI/DBMap.py
 
 #profiler
 *.json

@@ -13,9 +13,12 @@
 
 RETCODE GenerateObjectDBFiles(const OBJECT& objectName,
     const std::string& skm_path,
-    const std::string& inc_path);
+    const std::string& inc_path,
+    std::ofstream& dbMapStream,
+    std::ofstream& dbMapPyStream);
 
 RETCODE GenerateAllDBFiles(const std::string& skm_path,
-    const std::string& inc_path);
+    const std::string& inc_path,
+    const std::string& py_path);
 
 #endif
