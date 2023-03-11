@@ -93,7 +93,7 @@ project "Schema"
     {
         "__ENABLE_LOGGING",
         "__LOG_COLORS"
-        --"__LOG_SHOW_LINE"
+        "__LOG_SHOW_LINE"
     }
 
     postbuildcommands
