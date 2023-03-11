@@ -2,7 +2,7 @@
 #define _DATABASE_SUBSCRIPTION_HH
 
 #include <INETMessenger.hh>
-#include <DOFRI.hh>
+#include <OFRI.hh>
 
 template <class OBJECT>
 class DatabaseSubscription

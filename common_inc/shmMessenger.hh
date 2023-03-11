@@ -2,7 +2,7 @@
 #define MESSENGER__HH
 #include <retcode.hh>
 #include <stddef.h>
-#include <DOFRI.hh>
+#include <OFRI.hh>
 #include <sstream>
 #include <sys/socket.h>
 #include <un.h>

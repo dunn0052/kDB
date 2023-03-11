@@ -1,6 +1,8 @@
 #! /usr/bin/bash
 
-./vendor/premake/rpi/premake5 --scripts=./vendor/premake/cmake/ cmake
+source config/.kdb_env
+
+./vendor/premake/Linux/premake5 --scripts=./vendor/premake/cmake/ cmake
 
 if [ $# -eq 0 ]
   then

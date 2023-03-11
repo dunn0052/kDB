@@ -8,7 +8,7 @@
 #include <iostream>
 #include <Logger.hh>
 #include <retcode.hh>
-#include <DOFRI.hh>
+#include <OFRI.hh>
 
 namespace CLI
 {
@@ -153,14 +153,14 @@ namespace CLI
             }
             catch(std::invalid_argument const& except)
             {
-                LOG_WARN("Could not convert %s with argument %s because it could not be converted to an integer!", m_Option.c_str(), conversion.c_str());
+                LOG_WARN("Could not convert ", m_Option, " with argument ", conversion, " because it could not be converted to an integer!");
                 m_InUse = false;
                 return false;
 
             }
             catch(std::out_of_range const& except)
             {
-                LOG_WARN("Could not convert %s with argument %s because the number is too large!", m_Option.c_str(), conversion.c_str());
+                LOG_WARN("Could not convert ", m_Option, " with argument ", conversion, " because the number is too large!");
                 m_InUse = false;
                 return false;
             }
@@ -191,15 +191,46 @@ namespace CLI
     };
 
     class CLI_OBJECTArgument : public CLI::CLI_Argument<OBJECT, 1, 1>
-{
+    {
         using CLI_Argument::CLI_Argument;
 
         bool TryConversion(const std::string& conversion, OBJECT& value)
         {
             strncpy(value, conversion.c_str(), sizeof(value));
+            m_InUse = true;
             return true;
         }
-};
+    };
+
+    class CLI_OFRIArgument : public CLI::CLI_Argument<OFRI, 1, 1>
+    {
+        using CLI_Argument::CLI_Argument;
+
+        // OBJECT.0.0.0
+        bool TryConversion(const std::string& conversion, OFRI& value)
+        {
+            std::stringstream stream(conversion);
+
+            // Must get OBJECT seperately or FRI will be included in stream out
+            std::string token; 
+            std::getline(stream, token, '.');
+            if(stream.good())
+            {
+                strncpy(value.o, token.c_str(), sizeof(value.o));
+            }
+     
+            // Now can get the rest of 0.0.0
+            char ignore; // '.'
+            if (stream >> value.f >> ignore >> value.r >> ignore >> value.i)
+            {
+                m_InUse = true;
+                return true;
+            }
+
+            LOG_WARN("Could not convert OFRI: ", conversion);
+            return false;
+        }
+    };
 
     class Parser
     {
@@ -272,14 +303,12 @@ namespace CLI
                     isArgGood = ParseArg(argv[argument_index]);
                     if( !isArgGood )
                     {
-                        Usage();
                         return RTN_FAIL;
                     }
                 }
 
                 if( !ValidateArgs() )
                 {
-                    Usage();
                     return RTN_FAIL;
                 }
 

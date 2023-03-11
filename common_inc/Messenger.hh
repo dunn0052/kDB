@@ -2,7 +2,7 @@
 #define MESSENGER__HH
 #include <retcode.hh>
 #include <stddef.h>
-#include <DOFRI.hh>
+#include <OFRI.hh>
 #include <cstring>
 #include <sys/ipc.h>
 #include <sys/msg.h>

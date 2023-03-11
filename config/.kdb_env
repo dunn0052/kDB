@@ -1,0 +1,5 @@
+export KDB_INSTALL_DIR=$PWD/
+echo "kDB install directory:" $KDB_INSTALL_DIR
+
+export KDB_INET_ADDRESS=192.168.0.188
+echo "kDB address:" $KDB_INET_ADDRESS

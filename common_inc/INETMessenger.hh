@@ -2,14 +2,18 @@
 #define INETMESSENGER__HH
 
 // Update version for production
-constexpr int _SERVER_VERSION = 1;
+constexpr unsigned int _SERVER_VERSION = 2;
 
 #include <retcode.hh>
-#include <DOFRI.hh>
+#include <OFRI.hh>
 #include <DaemonThread.hh>
 #include <TasQ.hh>
 #include <Hook.hh>
 #include "../Profiler/inc/profiler.hh"
+#include <Logger.hh>
+#include <ConfigValues.hh>
+#include <Constants.hh>
+#include <MessageTypes.hh>
 
 #include <vector>
 #include <string>
@@ -30,8 +34,10 @@ constexpr int _SERVER_VERSION = 1;
 
 struct CONNECTION
 {
-    int port;
+    unsigned short port;
     char address[INET6_ADDRSTRLEN];
+
+    // port + address = 2b + 46b = 48
 
     bool operator == (const CONNECTION& other) const
     {
@@ -55,7 +61,8 @@ namespace std
 struct INET_HEADER
 {
     CONNECTION connection;
-    size_t message_size;
+    unsigned int message_size;
+    unsigned int data_type;
 };
 
 struct INET_PACKAGE
@@ -66,7 +73,7 @@ struct INET_PACKAGE
 
 struct ACKNOWLEDGE
 {
-    size_t server_version;
+    unsigned int server_version;
 };
 
 // get sockaddr, IPv4 or IPv6:
@@ -80,7 +87,7 @@ static void *get_in_addr(struct sockaddr *sa)
 }
 
 
-static RETCODE ReceiveAck(int socket, ACKNOWLEDGE& acknowledge)
+static RETCODE ReceiveAck(int socket)
 {
     // Timeout at 1 second to wait for recv
     struct timeval tv;
@@ -88,25 +95,34 @@ static RETCODE ReceiveAck(int socket, ACKNOWLEDGE& acknowledge)
     tv.tv_usec = 0;
     setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
 
+    INET_PACKAGE& handshake = *reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + sizeof(ACKNOWLEDGE)]);
+
     int bytes_received =
-        recv(socket, static_cast<void*>(&acknowledge), sizeof(acknowledge), 0);
+        recv(socket, static_cast<void*>(&handshake), sizeof(INET_PACKAGE) + sizeof(ACKNOWLEDGE), 0);
+
+    ACKNOWLEDGE& acknowledge =
+        *reinterpret_cast<ACKNOWLEDGE*>(handshake.payload);
 
     // Reset
     tv.tv_sec = 0;
     setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
 
-    if( sizeof(acknowledge) != bytes_received ||
+    if( sizeof(INET_PACKAGE) + sizeof(ACKNOWLEDGE) != bytes_received ||
+        handshake.header.data_type != MESSAGE_TYPE::ACK ||
         _SERVER_VERSION != acknowledge.server_version)
     {
         return RTN_CONNECTION_FAIL;
     }
 
+    delete &handshake;
+
     return RTN_OK;
 }
 
-static RETCODE SendAck(int socket, ACKNOWLEDGE& acknowledge)
+static RETCODE SendAck(int socket, INET_PACKAGE& handshake)
 {
-    if(-1 == send(socket, static_cast<void*>(&acknowledge), sizeof(acknowledge), 0))
+    handshake.header.data_type = MESSAGE_TYPE::ACK;
+    if(-1 == send(socket, static_cast<void*>(&handshake), sizeof(INET_PACKAGE) + sizeof(ACKNOWLEDGE), 0))
     {
         return RTN_CONNECTION_FAIL;
     }
@@ -116,7 +132,7 @@ static RETCODE SendAck(int socket, ACKNOWLEDGE& acknowledge)
 
 typedef void (*ConnectDelegate)(const CONNECTION&);
 typedef void (*DisconnectDelegate)(const CONNECTION&);
-typedef void (*MessageDelegate)(const CONNECTION&, const char*);
+typedef void (*MessageDelegate)(const INET_PACKAGE*);
 typedef void (*StopDelegate)(void);
 
 // @TODO: Figure out how to pass queue reference rather than pointer
@@ -133,6 +149,7 @@ public:
             INET_PACKAGE* message = reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + package->header.message_size]);
             message->header.message_size = package->header.message_size;
             message->header.connection = iter->first;
+            message->header.data_type = package->header.data_type;
             memcpy(message->payload, package->payload, message->header.message_size);
             m_SendQueue.Push(message);
         }
@@ -183,20 +200,12 @@ public:
         while(StopRequested() == false)
         {
             retcode = HandleSends();
-            /*
-            * I sleep on `epoll_wait` and the kernel will wake me up
-            * when event comes to my monitored file descriptors, or
-            * when the timeout reached.
-            */
-            num_poll_events = epoll_wait(m_PollFD, events, maxevents, timeout);
 
+            num_poll_events = epoll_wait(m_PollFD, events, maxevents, timeout);
 
             if (num_poll_events == 0)
             {
-                /*
-                *`epoll_wait` reached its timeout
-                */
-                //printf("I don't see any event within %d milliseconds\n", timeout);
+                // timeout
                 continue;
             }
 
@@ -206,13 +215,13 @@ public:
                 err = errno;
                 if (err == EINTR)
                 {
-                    std::cout << "Interrupted during epoll!\n";
+                    LOG_WARN("Interrupted during epoll!");
                     continue;
                 }
 
                 /* Error */
                 ret = -1;
-                std::cout << "Error in epoll wait: " << strerror(err) << "\n";
+                LOG_ERROR("Error in epoll wait: ", strerror(err));
                 break;
             }
 
@@ -228,7 +237,7 @@ public:
                     */
                     if (RTN_OK != AcceptNewClient())
                     {
-                        std::cout << "Failed to accept client socket: " << fd << "\n";
+                        LOG_WARN("Failed to accept client socket: ",fd);
                     }
                     continue;
                 }
@@ -244,15 +253,13 @@ public:
                     // Send signal that it's not available for sending??
                 }
 
-
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
 
 
         }
 
-        std::cout << "Stopped polling thread\n";
-
+        LOG_INFO("Stopped polling thread");
     }
 
     PollThread(const std::string& portNumber = "") :
@@ -266,7 +273,7 @@ public:
         if(RTN_OK == retcode)
         {
             // Ignore broken pipe signal to prevent send/read from causing errors
-            sigignore(SIGPIPE);
+            signal(SIGPIPE, SIG_IGN);
 
             Start(0);
 
@@ -292,7 +299,7 @@ public:
         // Get address for self
         if((getInfoStatus = getaddrinfo(nullptr, m_Port.c_str(), &hints, &returnedAddrInfo)) != 0)
         {
-            fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(getInfoStatus));
+            LOG_ERROR("getaddrinfo error: ", gai_strerror(getInfoStatus));
             return RTN_NOT_FOUND;
         }
         else
@@ -305,7 +312,6 @@ public:
                       accepted_address,
                       sizeof(accepted_address));
 
-            m_Address = accepted_address;
         }
 
         // Find connection address for us
@@ -315,22 +321,21 @@ public:
             if ((m_TCPSocket = socket(currentAddrInfo->ai_family, currentAddrInfo->ai_socktype,
                     currentAddrInfo->ai_protocol)) == -1)
             {
-                perror("server: socket");
+                LOG_WARN("Could not create TCP socket for listening");
                 continue;
             }
 
             if (setsockopt(m_TCPSocket, SOL_SOCKET, SO_REUSEADDR, &yes,
                     sizeof(int)) == -1)
             {
+                LOG_ERROR("Failed to set TCP socket options");
                 return RTN_CONNECTION_FAIL;
             }
 
-
-            // We got one, so bind!
             if (bind(m_TCPSocket, currentAddrInfo->ai_addr, currentAddrInfo->ai_addrlen) == -1)
             {
                 close(m_TCPSocket);
-                perror("server: bind");
+                LOG_WARN("Could not bind socket: ", m_TCPSocket, " for listening");
                 continue;
             }
 
@@ -340,8 +345,17 @@ public:
         // Start listening for connections
         if(-1 == listen(m_TCPSocket, 10))
         {
+            LOG_ERROR("Failed to start listening on socket: ", m_TCPSocket);
             return RTN_CONNECTION_FAIL;
         }
+
+        m_Address = ConfigValues::Instance().Get(KDB_INET_ADDRESS);
+
+        CONNECTION self_connection;
+        strncpy(self_connection.address, m_Address.c_str(), sizeof(self_connection.address));
+        std::stringstream portstream(m_Port);
+        portstream >> self_connection.port;
+        m_OnServerConnect.Invoke(self_connection);
 
         // Cleanup
         freeaddrinfo(returnedAddrInfo);
@@ -370,7 +384,7 @@ public:
 
         if ((rv = getaddrinfo(address.c_str(), port.c_str(), &hints, &returnedAddrInfo)) != 0)
         {
-            fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+            LOG_ERROR("getaddrinfo: ", gai_strerror(rv));
             return RTN_NOT_FOUND;
         }
 
@@ -384,7 +398,7 @@ public:
                  currentAddrInfo->ai_socktype,
                  currentAddrInfo->ai_protocol)) == -1)
             {
-                perror("client: socket");
+                LOG_ERROR("Error creating client socket");
                 continue;
             }
 
@@ -394,7 +408,7 @@ public:
                         currentAddrInfo->ai_addrlen) == -1)
             {
                 close(connectedSocket);
-                perror("client: connect");
+                LOG_ERROR("Client failed to connect");
                 continue;
             }
 
@@ -418,9 +432,16 @@ public:
         // We must send CLIENT_TO_SERVER, but we make requests on what type
         ACKNOWLEDGE ack = {_SERVER_VERSION};
         CONNECTION conn = {0, '\0'};
+        INET_PACKAGE& handshake = *reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + sizeof(ACKNOWLEDGE)]);
+        memcpy(handshake.header.connection.address,
+            m_Address.c_str(),
+            sizeof(handshake.header.connection.address));
+        handshake.header.connection.port = m_PollFD;
+        handshake.header.message_size = sizeof(ACKNOWLEDGE);
+        memcpy(handshake.payload, &ack, sizeof(ACKNOWLEDGE)); 
 
         // Send our server version to server to match
-        RETCODE retcode = SendAck(connectedSocket, ack);
+        RETCODE retcode = SendAck(connectedSocket, handshake);
         if(RTN_OK == retcode)
         {
             // Non-block set for smooth receives and sends
@@ -432,20 +453,19 @@ public:
             memcpy(conn.address, accepted_address, sizeof(conn.address));
             std::stringstream portstream(port);
             portstream >> conn.port;
-            AddConnection(connectedSocket, conn, EPOLLIN | EPOLLPRI);
-            m_ConnectionMap[conn] = connectedSocket;
-            m_FDMap[connectedSocket] = conn;
-        }
-        else
-        {
-            std::cout
-                << "Failed sending acknowledgement to server: "
-                << address
-                << " on port: "
-                << port
-                << "\n";
+            retcode |= AddConnection(connectedSocket, conn, EPOLLIN | EPOLLPRI);
         }
 
+        if(RTN_OK != retcode)
+        {
+            LOG_WARN(
+                "Failed to add: ",
+                address,
+                " on port: ",
+                port);
+        }
+
+        delete &handshake;
         return retcode;
     }
 
@@ -470,7 +490,6 @@ public:
         int err;
         ssize_t recv_ret;
         INET_HEADER inet_header = {};
-        char* payload = nullptr;
         const uint32_t err_mask = EPOLLERR | EPOLLHUP;
 
         // Need to get connection that matches fd to call disconnect delegate
@@ -496,26 +515,29 @@ public:
             }
 
             /* Error */
-            std::cout << "Error receving data from socket: " << fd << "\n";
+            LOG_WARN("Error receving data from connection: ", m_FDMap[fd].address, ":", " errorno: ", strerror(errno));
             RemoveConnection(fd, connection);
             return RTN_CONNECTION_FAIL;
         }
 
-        int remaining_message = inet_header.message_size;
-        payload = new char[remaining_message];
+        INET_PACKAGE* package = reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + inet_header.message_size]);
+        memcpy(&(package->header.connection), &m_FDMap[fd], sizeof(CONNECTION));
+        package->header.message_size = inet_header.message_size;
+        package->header.data_type = inet_header.data_type;
+        int remaining_message = package->header.message_size;
 
-        while(0 < (recv_ret = recv(fd, (payload + inet_header.message_size - remaining_message), remaining_message, 0)))
+        while(0 < (recv_ret = recv(fd, package->payload + inet_header.message_size - remaining_message, remaining_message, 0)))
         {
             remaining_message -= recv_ret;
         }
 
-        if (recv_ret < 0)
+        if (remaining_message != 0)
         {
             err = errno;
             if (err != EAGAIN)
             {
                 /* Error */
-                std::cout << "Error receving data from socket: " << fd << "\n";
+                LOG_WARN("Error receving data from connection: ", package->header.connection.address, " errono: ", strerror(errno));
                 RemoveConnection(fd, connection);
                 return RTN_CONNECTION_FAIL;
             }
@@ -523,8 +545,8 @@ public:
         }
 
 
-        m_OnReceive.Invoke(connection, payload);
-        delete[] payload;
+        m_OnReceive.Invoke(package);
+        delete[] package;
         return RTN_OK;
     }
 
@@ -548,7 +570,7 @@ public:
             }
             else
             {
-                std::cout << "Could not find: " << packet->header.connection.address << "sending failed!\n";
+                LOG_WARN("Could not find: ", packet->header.connection.address, "sending failed!");
             }
 
             delete packet;
@@ -581,9 +603,9 @@ public:
                 accepted_address, sizeof(accepted_address));
 
             // Wait for client to send ack
-            retcode = ReceiveAck(accept_socket, acknowledge);
+            retcode = ReceiveAck(accept_socket);
 
-            if(RTN_OK == retcode && _SERVER_VERSION == acknowledge.server_version)
+            if(RTN_OK == retcode)
             {
                 memcpy(connection.address, accepted_address, sizeof(connection.address));
                 std::stringstream portstream(m_Port);
@@ -615,7 +637,7 @@ public:
             }
 
             /* Error */
-            std::cout << "Error in accept(): " << strerror(err) << "\n";
+            LOG_ERROR("Error in accept(): ", strerror(err));
             return RTN_FAIL;
         }
 
@@ -635,12 +657,11 @@ public:
         if (0 > epoll_ctl(m_PollFD, EPOLL_CTL_ADD, fd, &event))
         {
             err = errno;
-            std::cout
-                << "Failed to add socket: "
-                << fd
-                << " to polling with error: "
-                << strerror(err)
-                << "\n";
+            LOG_ERROR(
+                "Failed to add socket: ",
+                fd,
+                " to polling with error: ",
+                strerror(err));
             return RTN_FAIL;
         }
 
@@ -650,6 +671,11 @@ public:
 
     RETCODE AddConnection(int fd, const CONNECTION& connection, uint32_t events)
     {
+        if(m_ConnectionMap.find(connection) != m_ConnectionMap.end())
+        {
+            return RTN_CONNECTION_FAIL;
+        }
+
         RETCODE retcode = AddFDToPoll(fd, events);
 
         m_ConnectionMap[connection] = fd;
@@ -678,12 +704,10 @@ public:
         if (0 > epoll_ctl(m_PollFD, EPOLL_CTL_DEL, fd, NULL))
         {
             err = errno;
-            std::cout
-                << "Failed to remove socket: "
-                << fd
-                << " from polling with error: "
-                << strerror(err)
-                << "\n";
+            LOG_ERROR("Failed to remove socket: ",
+                fd,
+                " from polling with error: ",
+                strerror(err));
             return RTN_FAIL;
         }
         else
@@ -691,12 +715,10 @@ public:
             if(close(fd))
             {
                 err = errno;
-                std::cout
-                    << "Failed to close socket: "
-                    << fd
-                    << " from polling with error: "
-                    << strerror(err)
-                    << "\n";
+                LOG_ERROR("Failed to close socket: ",
+                    fd,
+                    " from polling with error: ",
+                    strerror(err));
             }
 
         }
@@ -714,7 +736,7 @@ public:
         if (m_PollFD < 0)
         {
             err = errno;
-            std::cout << "Error creating epoll: " << strerror(err) << " \n";
+            LOG_ERROR("Error creating epoll: ", strerror(err));
             return RTN_FAIL;
         }
 

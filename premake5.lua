@@ -2,16 +2,17 @@ workspace "DB"
 
     require "cmake" -- needed for cmake extension
 
+    --[[
     platforms
     {
-        "rpi" -- Needed for arm64 architecture
-        --[[
+        "rpi", -- Needed for arm64 architecture
+        
         "Linux",
         "Windows",
         "MacOS"
-        ]]
     }
-
+    ]]
+    
     configurations
     {
         "Debug", -- no opt w/ logging
@@ -30,36 +31,6 @@ targetbuilddir = outputdir .. "/bin/"
 sharedbuildlibs = outputdir .. "/lib/"
 intermediatedir = outputdir .. "bin-intermediates/%{prj.name}"
 dbincdir = "db/inc/"
-
-project "Logger"
-
-    location "Logger"
-    kind "SharedLib"
-    language "C++"
-
-    targetdir(sharedbuildlibs)
-    objdir(intermediatedir)
-
-    files
-    {
-        projectsrc,
-        projectinc
-    }
-
-    includedirs
-    {
-        projincpath,
-        commoninc
-    }
-
-    cppdialect "C++17"
-    staticruntime "On" -- static linking .so or .dll
-    systemversion "latest" -- compiler version
-
-    defines
-    {
-
-    }
 
 project "CLI"
 
@@ -86,11 +57,6 @@ project "CLI"
 
     cppdialect "C++17"
     systemversion "latest" -- compiler version
-
-    links
-    {
-        "Logger"
-    }
 
     defines
     {
@@ -122,14 +88,11 @@ project "Schema"
     cppdialect "C++17"
     systemversion "latest" -- compiler version
 
-    links
-    {
-        "Logger"
-    }
 
     defines
     {
         "__ENABLE_LOGGING",
+        "__LOG_COLORS"
         "__LOG_SHOW_LINE"
     }
 
@@ -163,11 +126,6 @@ project "DBMapper"
 
     cppdialect "C++17"
     systemversion "latest" -- compiler version
-
-    links
-    {
-        "Logger"
-    }
 
     defines
     {
@@ -206,7 +164,6 @@ project "Talker"
 
     links
     {
-        "Logger",
         "DBMapper",
         "Threads::Threads"
     }
@@ -241,7 +198,6 @@ project "Listener"
 
     links
     {
-        "Logger",
         "DBMapper",
         "Threads::Threads"
     }
@@ -311,11 +267,6 @@ project "InstantiateDB"
         dbincdir
     }
 
-    links
-    {
-        "Logger"
-    }
-
     defines
     {
         "__ENABLE_LOGGING",
@@ -351,10 +302,6 @@ project "DBSet"
         dbincdir
     }
 
-    links
-    {
-        "Logger"
-    }
 
     defines
     {
@@ -394,7 +341,6 @@ project "UpdateDaemon"
 
     links
     {
-        "Logger",
         "Threads::Threads"
     }
 
