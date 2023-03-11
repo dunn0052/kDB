@@ -19,14 +19,19 @@ public:
 
 
     // Check environment variables first for overrides and then check config
-    std::string Get(const std::string& variableName)
+    std::string Get(const std::string variableName)
     {
         std::unordered_map<std::string, std::string>::iterator variable = m_EnvironmentVariableMap.find(variableName);
         if(m_EnvironmentVariableMap.find(variableName) == m_EnvironmentVariableMap.end())
         {
-            std::string value = std::getenv(variableName.c_str());
+            std::string value;
+            const char* name = std::getenv(variableName.c_str());
 
-            if(value.empty())
+            if(nullptr != name)
+            {
+                value = name;
+            }
+            else
             {
                 value = GetFromFile(variableName);
             }
