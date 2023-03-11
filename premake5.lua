@@ -92,7 +92,6 @@ project "Schema"
     defines
     {
         "__ENABLE_LOGGING",
-        "__LOG_COLORS"
         "__LOG_SHOW_LINE"
     }
 
