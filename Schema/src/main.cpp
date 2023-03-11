@@ -54,12 +54,6 @@ int main(int argc, char* argv[])
         return RTN_NOT_FOUND;
     }
 
-    const std::string db_schema_path = skm_path.IsInUse() ?
-        skm_path.GetValue() : INSTALL_DIR + DB_SKM_DIR;
-
-    const std::string db_header_path = inc_path.IsInUse() ?
-        inc_path.GetValue() : INSTALL_DIR + DB_INC_DIR;
-
     const std::string db_py_path = py_path.IsInUse() ?
         py_path.GetValue() : INSTALL_DIR + DB_PY_DIR;
 
