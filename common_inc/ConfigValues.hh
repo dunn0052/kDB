@@ -95,11 +95,12 @@ private:
             std::string::size_type assignmentPosition = line.find('=');
             if (assignmentPosition != std::string::npos)
             {
-                 if(variableName == trim(line.substr(0, assignmentPosition)));
-                 {
-                    configFile.close();
-                    return trim(line.substr(assignmentPosition + 1, line.length()));
-                 }
+                std::string trimmedValue = trim(line.substr(0, assignmentPosition));
+                if(variableName == trimmedValue)
+                {
+                   configFile.close();
+                   return trim(line.substr(assignmentPosition + 1, line.length()));
+                }
             }
         }
 
