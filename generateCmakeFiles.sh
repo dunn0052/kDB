@@ -2,11 +2,9 @@
 
 source config/.kdb_env
 
-./vendor/premake/Linux/premake5 --scripts=./vendor/premake/cmake/ cmake
-
-if [ $# -eq 0 ]
+if [[ "$*" == *"-d"* ]]
   then
-    cmake -DCMAKE_BUILD_TYPE=Release .
-else
     cmake -DCMAKE_BUILD_TYPE=Debug .
+else
+    cmake -DCMAKE_BUILD_TYPE=Release .
 fi

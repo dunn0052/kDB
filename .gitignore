@@ -44,7 +44,6 @@ lib/
 CMakeCache.*
 Makefile
 CMakeFiles/
-**/CMakeLists.txt
 
 #vscode
 .vscode/

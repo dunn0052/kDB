@@ -9,7 +9,7 @@ constexpr unsigned int _SERVER_VERSION = 2;
 #include <DaemonThread.hh>
 #include <TasQ.hh>
 #include <Hook.hh>
-#include "../Profiler/inc/profiler.hh"
+#include <profiler.hh>
 #include <Logger.hh>
 #include <ConfigValues.hh>
 #include <Constants.hh>
