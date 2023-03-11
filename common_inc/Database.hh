@@ -13,6 +13,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+static const std::string DB_EXT = ".db";
+
 struct MappedMemory
 {
     char* p_mapped;

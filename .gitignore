@@ -57,6 +57,8 @@ db/inc/*
 db/db/*
 PythonAPI/db/*
 *.db
+common_inc/allDBs.hh
+common_inc/DBMap.hh
 
 #generated db access
 common_inc/allDBs.hh
