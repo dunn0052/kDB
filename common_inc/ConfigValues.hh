@@ -17,7 +17,6 @@ public:
         return instance;
     }
 
-
     // Check environment variables first for overrides and then check config
     std::string Get(const std::string variableName)
     {
