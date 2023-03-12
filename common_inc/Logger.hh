@@ -1,15 +1,25 @@
 #ifndef _LOGGER_H
 #define _LOGGER_H
 
+// #define options
+// __LOG_ENABLE -- perform any logging at all
+// __LOG_SHOW_LINE -- shows exactly which file.line the log is generated
+// __LOG_SHOW_COLOR -- color logs based on level
+// __LOG_SHOW_TIME --  show time log was generated
+
 #include <ostream>
 #include <sstream>
 #include <iostream>
 #include <string>
 #include <TextModifiers.hh>
-#include <compiler_defines.hh>
 #include <mutex>
 
-#if __ENABLE_LOGGING
+#if __LOG_SHOW_TIME
+#include <chrono>
+#include <ctime>
+#endif
+
+#if __LOG_ENABLE
     #define LOG_TEMPLATE( LEVEL, ... ) Log::Logger::Instance().Log(std::cerr, Log::LogLevel::LEVEL, #LEVEL, __FILE__, __LINE__, ##__VA_ARGS__ )
     #define LOG_ERROR_TEMPLATE( LEVEL, ... ) Log::Logger::Instance().Log(std::cerr, Log::LogLevel::LEVEL, #LEVEL, __FILE__, __LINE__, ##__VA_ARGS__ )
 #else
@@ -23,10 +33,6 @@
 #define LOG_INFO( ... ) LOG_TEMPLATE( INFO, ##__VA_ARGS__ )
 #define LOG_WARN( ... ) LOG_ERROR_TEMPLATE( WARN, ##__VA_ARGS__ )
 #define LOG_ERROR( ... ) LOG_ERROR_TEMPLATE( ERROR, ##__VA_ARGS__ )
-
-#if _ENABLE_ASSERTS
-    #define GTD_ASSERT( PREDICATE, ... ) { if(!( PREDICATE )) { LOG_ERROR("Assertion Failed: %s", ##__VA_ARGS__); __debugbreak(); }}
-#endif
 
 namespace Log
 {
@@ -59,7 +65,7 @@ namespace Log
         Stream & Log(Stream & stream, std::stringstream& internalStream, LogLevel level, const char* debugLevel, const char* fileName, int lineNum, const RestOfArgs& ... args)
         {
 
-#ifdef __ENABLE_LOGGING
+#if __LOG_ENABLE
             if (level != m_LogLevel)
             {
                 m_LogLevel = level;
@@ -102,8 +108,16 @@ namespace Log
 #endif
             internalStream <<  "[" << debugLevel << "]";
 
-#ifdef __LOG_SHOW_LINE
+#if __LOG_SHOW_LINE
             internalStream << "[" << fileName << ":" << lineNum << "]";
+#endif
+
+#if __LOG_SHOW_TIME
+            time_t currentTime = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+            internalStream 
+                << "[" 
+                << strtok(std::ctime(&currentTime), "\n")
+                << "]";
 #endif
 
             internalStream << " "; // Space between decorator and user text
@@ -122,7 +136,7 @@ namespace Log
         {
             internalStream << arg1 << "\n";
 
-#ifdef __LOG_COLOR
+#if __LOG_SHOW_COLOR
             // Reset for non-logger messages
             TEXT_COLOR = TextMod::ColorCode::FG_DEFAULT;
             internalStream << TEXT_COLOR;
@@ -153,7 +167,6 @@ namespace Log
         TextMod::Modifier TEXT_COLOR = TextMod::ColorCode::FG_DEFAULT;
         std::stringstream m_InternalStream;
 
-    private:
 
     };
 

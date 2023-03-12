@@ -1,7 +1,6 @@
 #include <schema.hh>
 #include <fcntl.h>
 #include <unistd.h>
-#include <compiler_defines.hh>
 #include <Constants.hh>
 #include <dirent.h>
 #include <bits/stdc++.h>

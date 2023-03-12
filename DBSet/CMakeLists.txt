@@ -13,7 +13,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
   ${INC} ${COMMON_INCLUDE} ${DB_INCLUDE})
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
-  __ENABLE_LOGGING
+  __LOG_ENABLE
   __LOG_SHOW_LINE )
 
 add_dependencies(${PROJECT_NAME}
