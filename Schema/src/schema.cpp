@@ -68,60 +68,39 @@ static RETCODE GenerateObjectHeader(OBJECT_SCHEMA& object, std::ofstream& header
 
 static bool TryGenerateDataType(FIELD_SCHEMA& field, std::string& dataType)
 {
-    // Sizings are not accurate because of struct padding
     switch(field.fieldType)
     {
-        case 'O': // Object
-        {
-            dataType = "OBJECT";
-            break;
-        }
-        case 'F': // Field
-        {
-            dataType = "FIELD";
-            break;
-        }
-        case 'R': // Record
-        {
-            dataType = "RECORD";
-            break;
-        }
-        case 'I': // Index
-        {
-            dataType  = "INDEX";
-            break;
-        }
-        case 'C': // Char
+        case 'c': // Char
         {
             dataType = "char";
             break;
         }
-        case 'S': // String
+        case 's': // String
         {
             dataType = "char";
             break;
         }
-        case 'N': // signed integer
+        case 'i': // signed integer
         {
             dataType = "int";
             break;
         }
-        case 'U': // Unsigned integer
+        case 'I': // Unsigned integer
         {
             dataType = "unsigned int";
             break;
         }
-        case 'B': // Bool
+        case '?': // Bool
         {
             dataType = "bool";
             break;
         }
-        case 'Y': // Unsigned char (byte)
+        case 'B': // Unsigned char (byte)
         {
             dataType = "unsigned char";
             break;
         }
-        case 'X':
+        case 'x':
         {
             dataType = "unsigned char";
             break;
@@ -140,59 +119,46 @@ static bool TrySetFieldSize(FIELD_SCHEMA& field)
     // Sizings are not accurate because of struct padding
     switch(field.fieldType)
     {
-        case 'O': // Object
-        {
-            field.fieldSize = sizeof(OBJECT);
-            break;
-        }
-        case 'F': // Field
-        {
-            field.fieldSize = sizeof(FIELD);
-            break;
-        }
-        case 'R': // Record
-        {
-            field.fieldSize = sizeof(RECORD);
-            break;
-        }
-        case 'I': // Index
-        {
-            field.fieldSize = sizeof(INDEX);
-            break;
-        }
-        case 'C': // Char
+        case 'c': // Char
         {
             field.fieldSize = sizeof(char);
+            field.isMultiIndex = false;
             break;
         }
-        case 'S': //String
+        case 's': //String
         {
             field.fieldSize = sizeof(char);
+            field.isMultiIndex = true;
             break;
         }
-        case 'N': // signed integer
+        case 'i': // signed integer
         {
             field.fieldSize = sizeof(int);
+            field.isMultiIndex = false;
             break;
         }
-        case 'U': // Unsigned integer
+        case 'I': // Unsigned integer
         {
             field.fieldSize = sizeof(unsigned int);
+            field.isMultiIndex = false;
             break;
         }
-        case 'B': // Bool
+        case '?': // Bool
         {
             field.fieldSize = sizeof(bool);
+            field.isMultiIndex = false;
             break;
         }
-        case 'Y': // Unsigned char (byte)
+        case 'B': // Unsigned char (byte)
         {
             field.fieldSize = sizeof(unsigned char);
+            field.isMultiIndex = false;
             break;
         }
-        case 'X':
+        case 'x':
         {
             field.fieldSize = sizeof(unsigned char);
+            field.isMultiIndex = false;
             break;
         }
         default:
@@ -251,9 +217,12 @@ static RETCODE GenerateFieldHeader(FIELD_SCHEMA& field, std::ofstream& headerFil
         
         FORMAT = "C struct format"
 
-        def __init__(self, member:type, member2:type, etc...):
-            self.member = member
-            self.member2 = member2
+        def __init__(self, data:tuple):
+            if len(data) != number of expected members:
+                return None
+            self.member = data[0]
+            self.member2 = data[1:4]
+            etc ...
 
         def __str__(self):
             return f"member: {str(self.member)} member2:{str(self.member2)} etc..."
@@ -268,78 +237,79 @@ static RETCODE GenerateObjectPythonFile(std::ofstream& pythonFile, OBJECT_SCHEMA
 
     classDefine << "# THIS FILE WAS GENERATED. DO NOT MODIFY!\n\n";
     classDefine << "class " << std::uppercase << object.objectName << ":\n";
-    classInitFunc << "    def __init__(self";
+    classInitFunc << "    def __init__(self, data:tuple):\n";
+    classInitFunc << "        if len(data) != ";
     strFunc << "\n\n    def __str__(self) -> str:\n";
     strFunc << "        return f\"";
     // OBJECT_FORMAT = "format"
     format << "\n    FORMAT = \"";
+    size_t dataIndex = 0;
     for(const FIELD_SCHEMA& field : object.fields)
     {
-        classInitFunc << ", " << field.fieldName;
-        classVariables << "        self." << field.fieldName
-                       << " = " << field.fieldName << "\n";
+        classVariables << "        self."
+                       << field.fieldName
+                       << " = data["
+                       << dataIndex;
 
-        strFunc << field.fieldName << ": {self." << field.fieldName << "} ";
 
         if(field.numElements > 1)
         {
             format << field.numElements; // Add number of elements
+            if(!field.isMultiIndex) // s (string) is compound so we consider it a single field even though it has a number of elements
+            {
+                dataIndex += field.numElements - 1; // dataIndex == starting so ending is - 1 that way we get data[start:end]
+                classVariables << ":" << dataIndex;
+            }
         }
+
+        if(field.isMultiIndex) // Print like a string
+        {
+            strFunc << field.fieldName << ": { str(self." << field.fieldName << ", encoding = 'UTF-8').rstrip('\00) }";
+        }
+        else
+        {
+
+            strFunc << field.fieldName << ": {self." << field.fieldName << "} ";
+        }
+
+        classVariables << "]\n";
 
         switch(field.fieldType)
         {
-            case 'O': // Object
-            {
-                format << "20s";
-                classInitFunc << ":str";
-                break;
-            }
-            case 'F': // Field
-            case 'R': // Record
-            case 'I': // Index
-            case 'U': // Unsigned integer
+            case 'I': // Unsigned integer
             {
                 format << "I";
-                classInitFunc << ":int";
                 break;
             }
-            case 'C': // Char
+            case 'c': // Char
             {
-                // 's' for string. Will not allow character arrays
-                // since python can subscript easily
-                format << "C";
-                classInitFunc << ":str";
+                format << "c";
                 break;
             }
-            case 'S': // String
+            case 's': // String
             {
                 format << "s";
-                classInitFunc << ":str";
                 break;
             }
-            case 'N': // signed integer
+            case 'i': // signed integer
             {
                 format << "i";
-                classInitFunc << ":int";
                 break;
             }
-            case 'B': // Bool
+            case '?': // Bool
             {
                 format << "?";
-                classInitFunc << ":bool";
                 break;
             }
-            case 'Y': // Unsigned char (byte)
+            case 'B': // Unsigned char (byte)
             {
                 format << ( field.numElements > 1  ? "p" : "B" );
-                classInitFunc << ":bytes";
                 break;
             }
-            case 'X':
+            case 'x':
             {
                 // byte padding for struct alignment
                 format << "x";
-                classInitFunc << ":bytes";
                 break;
             }
             default:
@@ -348,11 +318,14 @@ static RETCODE GenerateObjectPythonFile(std::ofstream& pythonFile, OBJECT_SCHEMA
                 return RTN_BAD_ARG;
             }
         }
+
+        dataIndex++;
     }
 
     format << "\"\n\n";
-    classInitFunc << "):\n";
     strFunc << "\"";
+    classInitFunc << dataIndex << ":\n";
+    classInitFunc << "            return None\n\n";
 
     pythonFile << classDefine.str() << format.str()
                << classInitFunc.str() << classVariables.str()

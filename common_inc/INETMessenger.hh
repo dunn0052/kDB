@@ -111,6 +111,12 @@ static RETCODE ReceiveAck(int socket)
         handshake.header.data_type != MESSAGE_TYPE::ACK ||
         _SERVER_VERSION != acknowledge.server_version)
     {
+        // Sniff any bad handshake attempts
+        char* attempted_ack = reinterpret_cast<char*>(&handshake);
+        attempted_ack[sizeof(INET_PACKAGE) + sizeof(ACKNOWLEDGE)] = '\0';
+        LOG_INFO("Acknowledge failed. Connection sent: ", attempted_ack);
+        
+        delete &handshake;
         return RTN_CONNECTION_FAIL;
     }
 
@@ -617,14 +623,19 @@ public:
                     return RTN_FAIL;
                 }
 
-                AddConnection(accept_socket, connection, EPOLLIN | EPOLLPRI);
+                if(RTN_OK != AddConnection(accept_socket, connection, EPOLLIN | EPOLLPRI))
+                {
+                    LOG_WARN("Bad connection: ", accepted_address);
+                    close(accept_socket);
+                    return RTN_FAIL;
+                }
 
                 return RTN_OK;
             }
             else
             {
+                LOG_WARN("Failed to accept client: ", accepted_address);
                 close(accept_socket);
-                m_OnDisconnect.Invoke(connection);
                 return RTN_CONNECTION_FAIL;
             }
         }
@@ -672,6 +683,12 @@ public:
     RETCODE AddConnection(int fd, const CONNECTION& connection, uint32_t events)
     {
         if(m_ConnectionMap.find(connection) != m_ConnectionMap.end())
+        {
+            return RTN_CONNECTION_FAIL;
+        }
+
+        //Blacklist on outside connections -- remove later
+        if(strncmp(connection.address, "192.", 3) != 0)
         {
             return RTN_CONNECTION_FAIL;
         }

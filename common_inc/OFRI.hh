@@ -8,12 +8,18 @@ typedef unsigned int FIELD;
 typedef unsigned int RECORD;
 typedef unsigned int INDEX;
 
-struct OFRI
+struct OFRI // Specific quanta of data
 {
     OBJECT o;
     FIELD f;
     RECORD r;
     INDEX i;
+};
+
+struct OR // Refence specific object
+{
+    OBJECT o;
+    RECORD r;
 };
 
 #endif

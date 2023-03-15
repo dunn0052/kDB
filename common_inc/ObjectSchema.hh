@@ -13,11 +13,16 @@ struct FIELD_SCHEMA
     size_t numElements;
     size_t fieldSize;
     size_t fieldOffset;
+    bool isMultiIndex;
 };
 
 inline std::istream& operator >> (std::istream& input_stream, FIELD_SCHEMA& field_entry)
 {
-    return input_stream >> field_entry.fieldNumber >> field_entry.fieldName >> field_entry.fieldType >> field_entry.numElements;
+    return input_stream 
+        >> field_entry.fieldNumber
+        >> field_entry.fieldName
+        >> field_entry.fieldType
+        >> field_entry.numElements;
 }
 
 struct OBJECT_SCHEMA
