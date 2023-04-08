@@ -232,6 +232,36 @@ namespace CLI
         }
     };
 
+    class CLI_ORArgument : public CLI::CLI_Argument<OR, 1, 1>
+    {
+        using CLI_Argument::CLI_Argument;
+
+        // OBJECT.0.0.0
+        bool TryConversion(const std::string& conversion, OR& value)
+        {
+            std::stringstream stream(conversion);
+
+            // Must get OBJECT seperately or FRI will be included in stream out
+            std::string token; 
+            std::getline(stream, token, '.');
+            if(stream.good())
+            {
+                strncpy(value.o, token.c_str(), sizeof(value.o));
+            }
+     
+            // Now can get the rest of 0.0.0
+            char ignore; // '.'
+            if (stream >> value.r)
+            {
+                m_InUse = true;
+                return true;
+            }
+
+            LOG_WARN("Could not convert OR: ", conversion);
+            return false;
+        }
+    };
+
     class Parser
     {
         public:
