@@ -172,6 +172,25 @@ static bool TrySetFieldSize(FIELD_SCHEMA& field)
     return true;
 }
 
+static bool IsInByteBounds(const OBJECT_SCHEMA& object, const FIELD_SCHEMA& field, unsigned int& out_extra_bytes)
+{
+    out_extra_bytes = ( object.objectSize + field.fieldSize ) % WORD_SIZE;
+
+    // If this field doesn't end on a word boundary then we will need to add padding
+    if( out_extra_bytes )
+    {
+        return false;
+    }
+
+    return true;
+}
+
+static RETCODE AddBytePadding(OBJECT_SCHEMA& object, unsigned int extra_bytes)
+{
+    // Implement byte padding
+    return RTN_OK;
+}
+
 static RETCODE GenerateFieldHeader(FIELD_SCHEMA& field, std::ofstream& headerFile)
 {
     std::string dataType;
@@ -766,7 +785,7 @@ static RETCODE WriteDBMapPyFooter(std::ofstream& pyStream)
     return RTN_OK;
 }
 
-static RETCODE GenerateObject(const OBJECT& objectName, const std::string& skmPath, OBJECT_SCHEMA& out_object_entry)
+static RETCODE GenerateObject(const OBJECT& objectName, const std::string& skmPath, OBJECT_SCHEMA& out_object_entry, bool strict)
 {
     RETCODE retcode = RTN_OK;
     std::string line;
@@ -841,17 +860,27 @@ static RETCODE GenerateObject(const OBJECT& objectName, const std::string& skmPa
                 return retcode;
             }
 
+            unsigned int bytes_needed_for_byte_bounds;
+            if(!IsInByteBounds(out_object_entry, field_entry, bytes_needed_for_byte_bounds))
+            {
+                if(strict)
+                {
+                    LOG_WARN("Field: ", field_entry.fieldName,
+                        " is outside of byte bounds.\nAdd ",
+                        bytes_needed_for_byte_bounds,
+                        " bytes at the end of the field");
+                    return RTN_BAD_ARG;
+                }
+                
+                retcode |= AddBytePadding(out_object_entry, bytes_needed_for_byte_bounds);
+
+            }
+
             out_object_entry.objectSize += field_entry.fieldSize;
             out_object_entry.fields.push_back(field_entry);
+
             continue;
         }
-    }
-
-    size_t excessBytes = out_object_entry.objectSize % sizeof(int);
-    if(excessBytes != 0)
-    {
-        LOG_WARN("Object: ", out_object_entry.objectName, " is ", excessBytes, " out of byte bounds\n Add ", sizeof(int) - excessBytes);
-        retcode |= RTN_BAD_ARG;
     }
 
     if( schemaFile.bad() )
@@ -929,13 +958,13 @@ RETCODE GenerateObjectDBFiles(const OBJECT& objectName,
     const std::string& incPath,
     const std::string& pyPath,
     std::ofstream& dbMapStream,
-    std::ofstream& dbMapPyStream)
+    std::ofstream& dbMapPyStream,
+    bool strict)
 {
     OBJECT_SCHEMA object_entry;
-    RETCODE retcode = GenerateObject(objectName, skmPath, object_entry);
+    RETCODE retcode = GenerateObject(objectName, skmPath, object_entry, strict);
     if( RTN_OK != retcode )
     {
-        LOG_WARN("Error generating ", object_entry.objectName);
         return retcode;
     }
 
@@ -944,19 +973,19 @@ RETCODE GenerateObjectDBFiles(const OBJECT& objectName,
     retcode |= GenerateHeaderFile(object_entry, header_path.str());
     if( RTN_OK != retcode )
     {
-        LOG_WARN("Error generating ", header_path.str());
+        LOG_WARN("Error generating ", objectName, HEADER_EXT);
         return retcode;
     }
-    LOG_INFO("Generated ", header_path.str());
+    LOG_INFO("Generated ", objectName, HEADER_EXT);
 
     std::stringstream python_path;
     python_path << pyPath << objectName << PY_EXT;
     retcode |= GeneratePythonFile(object_entry, python_path.str());
     if( RTN_OK != retcode )
     {
-        LOG_ERROR("Error genearating", python_path.str());
+        LOG_ERROR("Error genearating", objectName, PY_EXT);
     }
-    LOG_INFO("Generated ", python_path.str());
+    LOG_INFO("Generated ", objectName, PY_EXT);
 
     std::string INSTALL_DIR =
         ConfigValues::Instance().Get(KDB_INSTALL_DIR);
@@ -978,18 +1007,18 @@ RETCODE GenerateObjectDBFiles(const OBJECT& objectName,
     retcode |= AddToAllDBHeader(object_entry);
     if( RTN_OK != retcode )
     {
-        LOG_WARN("Error adding ", object_entry.objectName, " to allHeader.hh");
+        LOG_WARN("Error adding ", object_entry.objectName, " to allHeader", HEADER_EXT);
         return retcode;
     }
-    LOG_INFO("Added ", object_entry.objectName, " to allHeader.hh");
+    LOG_INFO("Added ", object_entry.objectName, " to allHeader", HEADER_EXT);
 
     retcode |= AddToAllDBPy(object_entry);
     if( RTN_OK != retcode )
     {
-        LOG_WARN("Error adding ", object_entry.objectName, " to allHeader.hh");
+        LOG_WARN("Error adding ", object_entry.objectName, " to allHeader", PY_EXT);
         return retcode;
     }
-    LOG_INFO("Added ", object_entry.objectName, " to allHeader.hh");
+    LOG_INFO("Added ", object_entry.objectName, " to allHeader", PY_EXT);
 
     retcode |= WriteDBMapObject(dbMapStream, object_entry);
     if( RTN_OK != retcode )
@@ -1035,7 +1064,7 @@ RETCODE GetSchemaFileObjectName(const std::string& skmFileName, std::string& out
     return RTN_NOT_FOUND;
 }
 
-RETCODE GenerateAllDBFiles(const std::string& skmPath, const std::string& incPath, const std::string& pyPath)
+RETCODE GenerateAllDBFiles(const std::string& skmPath, const std::string& incPath, const std::string& pyPath, bool strict)
 {
     RETCODE retcode = RTN_OK;
     std::vector<std::string> schema_files;
@@ -1065,6 +1094,7 @@ RETCODE GenerateAllDBFiles(const std::string& skmPath, const std::string& incPat
             else
             {
                 LOG_WARN("File: ", foundFile, " does not have a ", SKM_EXT, " extension");
+                retcode = RTN_OK;
             }
         }
 
@@ -1104,7 +1134,13 @@ RETCODE GenerateAllDBFiles(const std::string& skmPath, const std::string& incPat
             OBJECT objName = {0};
             strncpy(objName, schema.c_str(), sizeof(objName));
             retcode |= GenerateObjectDBFiles(objName, skmPath, incPath,
-                pyPath, dbMapStream, dbMapPyStream);
+                pyPath, dbMapStream, dbMapPyStream, strict);
+            if(RTN_OK != retcode)
+            {
+                LOG_WARN("Error generating ", objName, DB_EXT);
+                return retcode;
+            }
+            LOG_INFO("Generated ", objName, DB_EXT);
         }
 
         retcode |= WriteDBMapFooter(dbMapStream);

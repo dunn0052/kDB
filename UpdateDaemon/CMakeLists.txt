@@ -14,7 +14,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
   __LOG_ENABLE
-  __LOG_SHOW_TIME )
+  __LOG_SHOW_TIME
+  __INET_BLACKLIST )
 
 add_dependencies(${PROJECT_NAME}
   "DBMapper"

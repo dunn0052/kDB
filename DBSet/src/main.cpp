@@ -23,10 +23,12 @@ int main(int argc, char* argv[])
     CLI::Parser parse("DBSet", "Update value in object.");
     CLI::CLI_OFRIArgument ofriArg("--ofri", "OBJECT.0.0.0", true);
     CLI::CLI_StringArgument valueArg("=", "Value update");
+    CLI::CLI_ORArgument orArg("--or", "OBJECT.0");
 
     parse
         .AddArg(valueArg)
-        .AddArg(ofriArg);
+        .AddArg(ofriArg)
+        .AddArg(orArg);
 
     RETCODE retcode = parse.ParseCommandLineArguments(argc, argv);
     if(IS_RETCODE_OK(retcode))

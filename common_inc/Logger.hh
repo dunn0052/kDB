@@ -66,45 +66,42 @@ namespace Log
         {
 
 #if __LOG_ENABLE
-            if (level != m_LogLevel)
+#if __LOG_SHOW_COLOR
+            m_LogLevel = level;
+            switch (m_LogLevel)
             {
-                m_LogLevel = level;
-                // Change logging color
-                // Could just set enums to logging color
-                switch (m_LogLevel)
+                case LogLevel::DEBUG:
                 {
-                    case LogLevel::DEBUG:
-                    {
-                        TEXT_COLOR = TextMod::ColorCode::FG_BLUE;
-                        break;
-                    }
-
-                    case LogLevel::INFO:
-                    {
-                        TEXT_COLOR = TextMod::ColorCode::FG_GREEN;
-                        break;
-                    }
-
-                    case LogLevel::WARN:
-                    {
-                        TEXT_COLOR = TextMod::ColorCode::FG_YELLOW;
-                        break;
-                    }
-
-                    case LogLevel::ERROR:
-                    {
-                        TEXT_COLOR = TextMod::ColorCode::FG_RED;
-                        break;
-                    }
-                    default:
-                    {
-                        TEXT_COLOR = TextMod::ColorCode::FG_DEFAULT;
-                    }
+                    TEXT_COLOR = TextMod::ColorCode::FG_BLUE;
+                    break;
                 }
 
+                case LogLevel::INFO:
+                {
+                    TEXT_COLOR = TextMod::ColorCode::FG_GREEN;
+                    break;
+                }
+
+                case LogLevel::WARN:
+                {
+                    TEXT_COLOR = TextMod::ColorCode::FG_YELLOW;
+                    break;
+                }
+
+                case LogLevel::ERROR:
+                {
+                    TEXT_COLOR = TextMod::ColorCode::FG_RED;
+                    break;
+                }
+                default:
+                {
+                    TEXT_COLOR = TextMod::ColorCode::FG_DEFAULT;
+                }
             }
 
-            internalStream << TEXT_COLOR;
+        internalStream << TEXT_COLOR;
+#endif
+
 #endif
             internalStream <<  "[" << debugLevel << "]";
 
@@ -140,6 +137,7 @@ namespace Log
             // Reset for non-logger messages
             TEXT_COLOR = TextMod::ColorCode::FG_DEFAULT;
             internalStream << TEXT_COLOR;
+            m_LogLevel = LogLevel::NONE;
 #endif
 
             return (stream << internalStream.str());
@@ -153,8 +151,10 @@ namespace Log
 
     ~Logger()
     {
+#if __LOG_SHOW_COLOR
         TEXT_COLOR = TextMod::ColorCode::FG_DEFAULT;
         std::cout << TEXT_COLOR;
+#endif
     }
 
     Logger() {};
