@@ -32,12 +32,14 @@ int main(int argc, char* argv[])
     CLI::CLI_StringArgument skm_path("-s", "Path to write object schema file");
     CLI::CLI_StringArgument py_path("-p", "Path to write object Python file");
     CLI::CLI_FlagArgument all_arg("-a", "Build all schema");
+    CLI::CLI_FlagArgument strict_arg("--strict", "Enforce byte boundaries for compact databases");
     CLI::Parser parser = CLI::Parser("Schema",
         "Verify schema, Modify databases, and Generate Header Files")
         .AddArg(inc_path)
         .AddArg(skm_path)
         .AddArg(py_path)
         .AddArg(all_arg)
+        .AddArg(strict_arg)
         .AddArg(databaseArgs);
 
     RETCODE retcode = parser.ParseCommandLineArguments(argc, argv);
@@ -66,11 +68,6 @@ int main(int argc, char* argv[])
     if( databaseArgs.IsInUse() )
     {
         const OBJECT& objectName = databaseArgs.GetValue();
-        #if 0
-        retcode |= GenerateObjectDBFiles(objectName,
-            db_schema_path,
-            db_header_path);
-        #endif
         if(!IS_RETCODE_OK(retcode))
         {
             LOG_WARN("Failed generating files for ", objectName);
@@ -79,7 +76,8 @@ int main(int argc, char* argv[])
     else if(all_arg.IsInUse())
     {
         retcode |= GenerateAllDBFiles(
-            db_schema_path, db_header_path, db_py_path);
+            db_schema_path, db_header_path, db_py_path,
+            strict_arg.IsInUse() );
 
         if(!IS_RETCODE_OK(retcode))
         {

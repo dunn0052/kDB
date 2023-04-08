@@ -10,7 +10,7 @@ add_dependencies(${PROJECT_NAME}
 target_include_directories(${PROJECT_NAME} PRIVATE ${COMMON_INCLUDE} ${DB_INCLUDE})
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
-  __ENABLE_LOGGING
+  __LOG_ENABLE
   __LOG_SHOW_LINE )
 
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION lib)

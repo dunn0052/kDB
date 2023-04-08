@@ -17,7 +17,7 @@ class DatabaseAccess
 {
 
     public:
-        DatabaseAccess(const OBJECT& object)
+        DatabaseAccess(OBJECT& object)
             : m_DBAddress(nullptr), m_Size(0), m_ObjectName(object),
               m_Object(dbSizes[m_ObjectName]), m_IsOpen(false)
         {

@@ -1,5 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
-project(DBSet)
+project(DBDebug)
 
 set( SRC src )
 set( INC inc )
@@ -14,9 +13,14 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
   __LOG_ENABLE
-  __LOG_SHOW_LINE )
+  __LOG_SHOW_COLOR )
 
 add_dependencies(${PROJECT_NAME}
   "Schema")
 
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
+
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+ WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND DBDebug -a
+)

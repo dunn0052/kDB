@@ -1,7 +1,6 @@
 #include <schema.hh>
 #include <fcntl.h>
 #include <unistd.h>
-#include <compiler_defines.hh>
 #include <Constants.hh>
 #include <dirent.h>
 #include <bits/stdc++.h>
@@ -69,60 +68,39 @@ static RETCODE GenerateObjectHeader(OBJECT_SCHEMA& object, std::ofstream& header
 
 static bool TryGenerateDataType(FIELD_SCHEMA& field, std::string& dataType)
 {
-    // Sizings are not accurate because of struct padding
     switch(field.fieldType)
     {
-        case 'O': // Object
-        {
-            dataType = "OBJECT";
-            break;
-        }
-        case 'F': // Field
-        {
-            dataType = "FIELD";
-            break;
-        }
-        case 'R': // Record
-        {
-            dataType = "RECORD";
-            break;
-        }
-        case 'I': // Index
-        {
-            dataType  = "INDEX";
-            break;
-        }
-        case 'C': // Char
+        case 'c': // Char
         {
             dataType = "char";
             break;
         }
-        case 'S': // String
+        case 's': // String
         {
             dataType = "char";
             break;
         }
-        case 'N': // signed integer
+        case 'i': // signed integer
         {
             dataType = "int";
             break;
         }
-        case 'U': // Unsigned integer
+        case 'I': // Unsigned integer
         {
             dataType = "unsigned int";
             break;
         }
-        case 'B': // Bool
+        case '?': // Bool
         {
             dataType = "bool";
             break;
         }
-        case 'Y': // Unsigned char (byte)
+        case 'B': // Unsigned char (byte)
         {
             dataType = "unsigned char";
             break;
         }
-        case 'X':
+        case 'x':
         {
             dataType = "unsigned char";
             break;
@@ -141,59 +119,46 @@ static bool TrySetFieldSize(FIELD_SCHEMA& field)
     // Sizings are not accurate because of struct padding
     switch(field.fieldType)
     {
-        case 'O': // Object
-        {
-            field.fieldSize = sizeof(OBJECT);
-            break;
-        }
-        case 'F': // Field
-        {
-            field.fieldSize = sizeof(FIELD);
-            break;
-        }
-        case 'R': // Record
-        {
-            field.fieldSize = sizeof(RECORD);
-            break;
-        }
-        case 'I': // Index
-        {
-            field.fieldSize = sizeof(INDEX);
-            break;
-        }
-        case 'C': // Char
+        case 'c': // Char
         {
             field.fieldSize = sizeof(char);
+            field.isMultiIndex = false;
             break;
         }
-        case 'S': //String
+        case 's': //String
         {
             field.fieldSize = sizeof(char);
+            field.isMultiIndex = true;
             break;
         }
-        case 'N': // signed integer
+        case 'i': // signed integer
         {
             field.fieldSize = sizeof(int);
+            field.isMultiIndex = false;
             break;
         }
-        case 'U': // Unsigned integer
+        case 'I': // Unsigned integer
         {
             field.fieldSize = sizeof(unsigned int);
+            field.isMultiIndex = false;
             break;
         }
-        case 'B': // Bool
+        case '?': // Bool
         {
             field.fieldSize = sizeof(bool);
+            field.isMultiIndex = false;
             break;
         }
-        case 'Y': // Unsigned char (byte)
+        case 'B': // Unsigned char (byte)
         {
             field.fieldSize = sizeof(unsigned char);
+            field.isMultiIndex = false;
             break;
         }
-        case 'X':
+        case 'x':
         {
             field.fieldSize = sizeof(unsigned char);
+            field.isMultiIndex = false;
             break;
         }
         default:
@@ -205,6 +170,25 @@ static bool TrySetFieldSize(FIELD_SCHEMA& field)
     field.fieldSize *= field.numElements;
 
     return true;
+}
+
+static bool IsInByteBounds(const OBJECT_SCHEMA& object, const FIELD_SCHEMA& field, unsigned int& out_extra_bytes)
+{
+    out_extra_bytes = ( object.objectSize + field.fieldSize ) % WORD_SIZE;
+
+    // If this field doesn't end on a word boundary then we will need to add padding
+    if( out_extra_bytes )
+    {
+        return false;
+    }
+
+    return true;
+}
+
+static RETCODE AddBytePadding(OBJECT_SCHEMA& object, unsigned int extra_bytes)
+{
+    // Implement byte padding
+    return RTN_OK;
 }
 
 static RETCODE GenerateFieldHeader(FIELD_SCHEMA& field, std::ofstream& headerFile)
@@ -252,9 +236,12 @@ static RETCODE GenerateFieldHeader(FIELD_SCHEMA& field, std::ofstream& headerFil
         
         FORMAT = "C struct format"
 
-        def __init__(self, member:type, member2:type, etc...):
-            self.member = member
-            self.member2 = member2
+        def __init__(self, data:tuple):
+            if len(data) != number of expected members:
+                return None
+            self.member = data[0]
+            self.member2 = data[1:4]
+            etc ...
 
         def __str__(self):
             return f"member: {str(self.member)} member2:{str(self.member2)} etc..."
@@ -269,78 +256,79 @@ static RETCODE GenerateObjectPythonFile(std::ofstream& pythonFile, OBJECT_SCHEMA
 
     classDefine << "# THIS FILE WAS GENERATED. DO NOT MODIFY!\n\n";
     classDefine << "class " << std::uppercase << object.objectName << ":\n";
-    classInitFunc << "    def __init__(self";
+    classInitFunc << "    def __init__(self, data:tuple):\n";
+    classInitFunc << "        if len(data) != ";
     strFunc << "\n\n    def __str__(self) -> str:\n";
     strFunc << "        return f\"";
     // OBJECT_FORMAT = "format"
     format << "\n    FORMAT = \"";
+    size_t dataIndex = 0;
     for(const FIELD_SCHEMA& field : object.fields)
     {
-        classInitFunc << ", " << field.fieldName;
-        classVariables << "        self." << field.fieldName
-                       << " = " << field.fieldName << "\n";
+        classVariables << "        self."
+                       << field.fieldName
+                       << " = data["
+                       << dataIndex;
 
-        strFunc << field.fieldName << ": {self." << field.fieldName << "} ";
 
         if(field.numElements > 1)
         {
             format << field.numElements; // Add number of elements
+            if(!field.isMultiIndex) // s (string) is compound so we consider it a single field even though it has a number of elements
+            {
+                dataIndex += field.numElements - 1; // dataIndex == starting so ending is - 1 that way we get data[start:end]
+                classVariables << ":" << dataIndex;
+            }
         }
+
+        if(field.isMultiIndex) // Print like a string
+        {
+            strFunc << field.fieldName << ": { str(self." << field.fieldName << ", encoding = 'UTF-8').rstrip('\00) }";
+        }
+        else
+        {
+
+            strFunc << field.fieldName << ": {self." << field.fieldName << "} ";
+        }
+
+        classVariables << "]\n";
 
         switch(field.fieldType)
         {
-            case 'O': // Object
-            {
-                format << "20s";
-                classInitFunc << ":str";
-                break;
-            }
-            case 'F': // Field
-            case 'R': // Record
-            case 'I': // Index
-            case 'U': // Unsigned integer
+            case 'I': // Unsigned integer
             {
                 format << "I";
-                classInitFunc << ":int";
                 break;
             }
-            case 'C': // Char
+            case 'c': // Char
             {
-                // 's' for string. Will not allow character arrays
-                // since python can subscript easily
-                format << "C";
-                classInitFunc << ":str";
+                format << "c";
                 break;
             }
-            case 'S': // String
+            case 's': // String
             {
                 format << "s";
-                classInitFunc << ":str";
                 break;
             }
-            case 'N': // signed integer
+            case 'i': // signed integer
             {
                 format << "i";
-                classInitFunc << ":int";
                 break;
             }
-            case 'B': // Bool
+            case '?': // Bool
             {
                 format << "?";
-                classInitFunc << ":bool";
                 break;
             }
-            case 'Y': // Unsigned char (byte)
+            case 'B': // Unsigned char (byte)
             {
                 format << ( field.numElements > 1  ? "p" : "B" );
-                classInitFunc << ":bytes";
                 break;
             }
-            case 'X':
+            case 'x':
             {
                 // byte padding for struct alignment
                 format << "x";
-                classInitFunc << ":bytes";
                 break;
             }
             default:
@@ -349,11 +337,14 @@ static RETCODE GenerateObjectPythonFile(std::ofstream& pythonFile, OBJECT_SCHEMA
                 return RTN_BAD_ARG;
             }
         }
+
+        dataIndex++;
     }
 
     format << "\"\n\n";
-    classInitFunc << "):\n";
     strFunc << "\"";
+    classInitFunc << dataIndex << ":\n";
+    classInitFunc << "            return None\n\n";
 
     pythonFile << classDefine.str() << format.str()
                << classInitFunc.str() << classVariables.str()
@@ -794,7 +785,7 @@ static RETCODE WriteDBMapPyFooter(std::ofstream& pyStream)
     return RTN_OK;
 }
 
-static RETCODE GenerateObject(const OBJECT& objectName, const std::string& skmPath, OBJECT_SCHEMA& out_object_entry)
+static RETCODE GenerateObject(const OBJECT& objectName, const std::string& skmPath, OBJECT_SCHEMA& out_object_entry, bool strict)
 {
     RETCODE retcode = RTN_OK;
     std::string line;
@@ -869,17 +860,27 @@ static RETCODE GenerateObject(const OBJECT& objectName, const std::string& skmPa
                 return retcode;
             }
 
+            unsigned int bytes_needed_for_byte_bounds;
+            if(!IsInByteBounds(out_object_entry, field_entry, bytes_needed_for_byte_bounds))
+            {
+                if(strict)
+                {
+                    LOG_WARN("Field: ", field_entry.fieldName,
+                        " is outside of byte bounds.\nAdd ",
+                        bytes_needed_for_byte_bounds,
+                        " bytes at the end of the field");
+                    return RTN_BAD_ARG;
+                }
+                
+                retcode |= AddBytePadding(out_object_entry, bytes_needed_for_byte_bounds);
+
+            }
+
             out_object_entry.objectSize += field_entry.fieldSize;
             out_object_entry.fields.push_back(field_entry);
+
             continue;
         }
-    }
-
-    size_t excessBytes = out_object_entry.objectSize % sizeof(int);
-    if(excessBytes != 0)
-    {
-        LOG_WARN("Object: ", out_object_entry.objectName, " is ", excessBytes, " out of byte bounds\n Add ", sizeof(int) - excessBytes);
-        retcode |= RTN_BAD_ARG;
     }
 
     if( schemaFile.bad() )
@@ -957,13 +958,13 @@ RETCODE GenerateObjectDBFiles(const OBJECT& objectName,
     const std::string& incPath,
     const std::string& pyPath,
     std::ofstream& dbMapStream,
-    std::ofstream& dbMapPyStream)
+    std::ofstream& dbMapPyStream,
+    bool strict)
 {
     OBJECT_SCHEMA object_entry;
-    RETCODE retcode = GenerateObject(objectName, skmPath, object_entry);
+    RETCODE retcode = GenerateObject(objectName, skmPath, object_entry, strict);
     if( RTN_OK != retcode )
     {
-        LOG_WARN("Error generating ", object_entry.objectName);
         return retcode;
     }
 
@@ -972,19 +973,19 @@ RETCODE GenerateObjectDBFiles(const OBJECT& objectName,
     retcode |= GenerateHeaderFile(object_entry, header_path.str());
     if( RTN_OK != retcode )
     {
-        LOG_WARN("Error generating ", header_path.str());
+        LOG_WARN("Error generating ", objectName, HEADER_EXT);
         return retcode;
     }
-    LOG_INFO("Generated ", header_path.str());
+    LOG_INFO("Generated ", objectName, HEADER_EXT);
 
     std::stringstream python_path;
     python_path << pyPath << objectName << PY_EXT;
     retcode |= GeneratePythonFile(object_entry, python_path.str());
     if( RTN_OK != retcode )
     {
-        LOG_ERROR("Error genearating", python_path.str());
+        LOG_ERROR("Error genearating", objectName, PY_EXT);
     }
-    LOG_INFO("Generated ", python_path.str());
+    LOG_INFO("Generated ", objectName, PY_EXT);
 
     std::string INSTALL_DIR =
         ConfigValues::Instance().Get(KDB_INSTALL_DIR);
@@ -1006,18 +1007,18 @@ RETCODE GenerateObjectDBFiles(const OBJECT& objectName,
     retcode |= AddToAllDBHeader(object_entry);
     if( RTN_OK != retcode )
     {
-        LOG_WARN("Error adding ", object_entry.objectName, " to allHeader.hh");
+        LOG_WARN("Error adding ", object_entry.objectName, " to allHeader", HEADER_EXT);
         return retcode;
     }
-    LOG_INFO("Added ", object_entry.objectName, " to allHeader.hh");
+    LOG_INFO("Added ", object_entry.objectName, " to allHeader", HEADER_EXT);
 
     retcode |= AddToAllDBPy(object_entry);
     if( RTN_OK != retcode )
     {
-        LOG_WARN("Error adding ", object_entry.objectName, " to allHeader.hh");
+        LOG_WARN("Error adding ", object_entry.objectName, " to allHeader", PY_EXT);
         return retcode;
     }
-    LOG_INFO("Added ", object_entry.objectName, " to allHeader.hh");
+    LOG_INFO("Added ", object_entry.objectName, " to allHeader", PY_EXT);
 
     retcode |= WriteDBMapObject(dbMapStream, object_entry);
     if( RTN_OK != retcode )
@@ -1063,7 +1064,7 @@ RETCODE GetSchemaFileObjectName(const std::string& skmFileName, std::string& out
     return RTN_NOT_FOUND;
 }
 
-RETCODE GenerateAllDBFiles(const std::string& skmPath, const std::string& incPath, const std::string& pyPath)
+RETCODE GenerateAllDBFiles(const std::string& skmPath, const std::string& incPath, const std::string& pyPath, bool strict)
 {
     RETCODE retcode = RTN_OK;
     std::vector<std::string> schema_files;
@@ -1093,6 +1094,7 @@ RETCODE GenerateAllDBFiles(const std::string& skmPath, const std::string& incPat
             else
             {
                 LOG_WARN("File: ", foundFile, " does not have a ", SKM_EXT, " extension");
+                retcode = RTN_OK;
             }
         }
 
@@ -1132,7 +1134,13 @@ RETCODE GenerateAllDBFiles(const std::string& skmPath, const std::string& incPat
             OBJECT objName = {0};
             strncpy(objName, schema.c_str(), sizeof(objName));
             retcode |= GenerateObjectDBFiles(objName, skmPath, incPath,
-                pyPath, dbMapStream, dbMapPyStream);
+                pyPath, dbMapStream, dbMapPyStream, strict);
+            if(RTN_OK != retcode)
+            {
+                LOG_WARN("Error generating ", objName, DB_EXT);
+                return retcode;
+            }
+            LOG_INFO("Generated ", objName, DB_EXT);
         }
 
         retcode |= WriteDBMapFooter(dbMapStream);

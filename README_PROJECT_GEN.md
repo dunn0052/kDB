@@ -4,6 +4,12 @@ HOW TO GENERATE PROJECT FILES
        . ./generateCmakeFiles.sh
     2. Optionally add a -d to generate debug files
 
-EXPANDING PREMAKE
+RUNNING PROJECT
 
-    1. Download/build new versions of premake and put into /vendor/premake/$OS_TYPE$
+Create new schema files in db/skm/ with extension .skm
+
+Conventions are
+
+object_name number_of_records
+  field_number field_name field_type number_of_indices
+0 

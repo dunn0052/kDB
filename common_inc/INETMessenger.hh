@@ -111,7 +111,33 @@ static RETCODE ReceiveAck(int socket)
         handshake.header.data_type != MESSAGE_TYPE::ACK ||
         _SERVER_VERSION != acknowledge.server_version)
     {
+        #if __INET_BLACKLIST
+        // Sniff any bad handshake attempts
+        char* attempted_ack = reinterpret_cast<char*>(&handshake);
+        attempted_ack[sizeof(INET_PACKAGE) + sizeof(ACKNOWLEDGE) - 1] = '\0';
+        LOG_INFO("Acknowledge failed. Connection sent: ", attempted_ack);
+        
+        // Non-block set for smooth receives and sends
+        if(fcntl(socket, F_SETFL, fcntl(socket, F_GETFL) | O_NONBLOCK) < 0)
+        {
+            return RTN_FAIL;
+        }
+
+        char more_buffer[4096] = {0};
+        while(0 < recv(socket, more_buffer, sizeof(more_buffer) - 1, 0));
+        {
+            more_buffer[4096 - 1] = '\0';
+            LOG_INFO("More: ", more_buffer);
+            memset(more_buffer, 0, sizeof(more_buffer));
+        }
+        
+        if(0 > send(socket, "SUCK MY <b>ENTIRE</b> DICK", sizeof("SUCK MY <b>ENTIRE</b> DICK"), 0))
+        {
+            LOG_WARN("Could not send aggressive response!");
+        }
+        delete &handshake;
         return RTN_CONNECTION_FAIL;
+#endif
     }
 
     delete &handshake;
@@ -346,6 +372,7 @@ public:
         if(-1 == listen(m_TCPSocket, 10))
         {
             LOG_ERROR("Failed to start listening on socket: ", m_TCPSocket);
+            close(m_TCPSocket);
             return RTN_CONNECTION_FAIL;
         }
 
@@ -417,6 +444,7 @@ public:
 
         if (currentAddrInfo == NULL)
         {
+            freeaddrinfo(returnedAddrInfo);
             return RTN_CONNECTION_FAIL;
         }
 
@@ -429,7 +457,7 @@ public:
 
         freeaddrinfo(returnedAddrInfo);
 
-        // We must send CLIENT_TO_SERVER, but we make requests on what type
+        // We must send handshake with server version
         ACKNOWLEDGE ack = {_SERVER_VERSION};
         CONNECTION conn = {0, '\0'};
         INET_PACKAGE& handshake = *reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + sizeof(ACKNOWLEDGE)]);
@@ -520,6 +548,8 @@ public:
             return RTN_CONNECTION_FAIL;
         }
 
+        /* Dynamically create memory for whole package size */
+        /* Maybe needs size limiting to avoid giant packages */
         INET_PACKAGE* package = reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + inet_header.message_size]);
         memcpy(&(package->header.connection), &m_FDMap[fd], sizeof(CONNECTION));
         package->header.message_size = inet_header.message_size;
@@ -543,7 +573,6 @@ public:
             }
 
         }
-
 
         m_OnReceive.Invoke(package);
         delete[] package;
@@ -617,14 +646,19 @@ public:
                     return RTN_FAIL;
                 }
 
-                AddConnection(accept_socket, connection, EPOLLIN | EPOLLPRI);
+                if(RTN_OK != AddConnection(accept_socket, connection, EPOLLIN | EPOLLPRI))
+                {
+                    LOG_WARN("Bad connection: ", accepted_address);
+                    close(accept_socket);
+                    return RTN_FAIL;
+                }
 
                 return RTN_OK;
             }
             else
             {
+                LOG_WARN("Failed to accept client: ", accepted_address);
                 close(accept_socket);
-                m_OnDisconnect.Invoke(connection);
                 return RTN_CONNECTION_FAIL;
             }
         }
@@ -673,8 +707,18 @@ public:
     {
         if(m_ConnectionMap.find(connection) != m_ConnectionMap.end())
         {
+            // Already have this connection so just ignore
             return RTN_CONNECTION_FAIL;
         }
+
+#ifdef __INET_BLACKLIST
+        //Blacklist on outside connections -- remove later
+        if(0 != strncmp(connection.address, "192.168.0.", sizeof("192.168.0.") - 1))
+        {
+            close(fd);
+            return RTN_CONNECTION_FAIL;
+        }
+#endif
 
         RETCODE retcode = AddFDToPoll(fd, events);
 
