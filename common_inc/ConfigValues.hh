@@ -56,23 +56,23 @@ public:
 private:
 
     const std::string WHITESPACE = " \n\r\t\f\v";
- 
+
     std::string ltrim(const std::string &s)
     {
         size_t start = s.find_first_not_of(WHITESPACE);
         return (start == std::string::npos) ? "" : s.substr(start);
     }
-    
+
     std::string rtrim(const std::string &s)
     {
         size_t end = s.find_last_not_of(WHITESPACE);
         return (end == std::string::npos) ? "" : s.substr(0, end + 1);
     }
-    
+
     std::string trim(const std::string &s) {
         return rtrim(ltrim(s));
     }
- 
+
     // Variable format is VARIABLE_NAME=value
     std::string GetFromFile(const std::string& variableName)
     {
@@ -80,7 +80,7 @@ private:
         std::ifstream configFile;
         configFile.open(CONFIG_FILE_NAME,
             std::fstream::in);
-        
+
         std::string line;
 
         if( !configFile.is_open() )

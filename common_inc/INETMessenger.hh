@@ -1,7 +1,21 @@
 #ifndef INETMESSENGER__HH
 #define INETMESSENGER__HH
 
-// Update version for production
+/* INETMessenger class is an interface to give any process a 2-way
+ * communication through TCP sockets. It creates a detached thread that
+ * listens for incoming connections and requests. You may also connect to 
+ * any other INETMessenger connected process and send messages of dynamic size.
+ * Various hooks are provided so you may create your own functions that are
+ * called when events take place such as messages are received or clients
+ * are connected among other important events.
+ */
+
+/* Update this value to ensure that all instances are on the same page 
+ * For instance, if data you are sending has changed on the server, the
+ * version should be updated here so that any existing clients cannot connect
+ * and know they need to update definitions of what data they are expecting.
+ * This avoids making dynamic data structures. 
+ */
 constexpr unsigned int _SERVER_VERSION = 2;
 
 #include <retcode.hh>
@@ -32,20 +46,32 @@ constexpr unsigned int _SERVER_VERSION = 2;
 #include <sys/mman.h>
 #include <sstream>
 
+/* CONNECTION is the struct we hold information on connections with */
 struct CONNECTION
 {
     unsigned short port;
     char address[INET6_ADDRSTRLEN];
 
-    // port + address = 2b + 46b = 48
+    // port + address = 2b + 46b = 48 bytes
 
     bool operator == (const CONNECTION& other) const
     {
         return !strncmp(address, other.address, INET6_ADDRSTRLEN) &&
                 port == other.port;
     }
+
+    CONNECTION(unsigned short in_port, char in_address[INET6_ADDRSTRLEN])
+    : port(in_port)
+    {
+        memcpy(address, in_address,sizeof(address));
+    }
+
+    CONNECTION()
+    : port(-1), address{0}
+    { }
 };
 
+/* This custom hash funciton is used in m_FDMap and m_ClientMap maps */
 namespace std
 {
     template<>
@@ -58,6 +84,10 @@ namespace std
     };
 }
 
+/* -- INET_HEADER --
+ * This contains information on who is sending a message
+ * Meta information about the message such as type and size
+ */
 struct INET_HEADER
 {
     CONNECTION connection; // Where this message comes from
@@ -65,16 +95,35 @@ struct INET_HEADER
     unsigned int data_type; // User can define here to differentiate messages
 };
 
+/* -- INET_PACKAGE --
+ * Full packet of data sent between INETMessenger instances
+ * This contains who sent the message, meta data about the message,
+ * and the actual data being sent.
+ */
 struct INET_PACKAGE
 {
     INET_HEADER header; // Info about the message
     char payload[0]; // The data of the message
 };
 
+/* -- ACKNOWLEDGE --
+ * Used as handshake package between instances of INETMessengers
+ * If the server version is not the same then connection can be refused
+ * The version should be updated so all clients can concur on the schema
+ * and meta data.
+ */
 struct ACKNOWLEDGE
 {
     // _SERVER_VERSION is used for this
     unsigned int server_version;
+
+    ACKNOWLEDGE(unsigned int version)
+        : server_version(version)
+        {}
+
+    ACKNOWLEDGE()
+        : server_version(-1) // intentional overflow to denote bad version
+        {}
 };
 
 // get sockaddr, IPv4 or IPv6:
@@ -87,6 +136,7 @@ static void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
+/* Convienience function as many functions accept the port number as strings */
 inline static std::string PortIntToString(int port)
 {
     std::stringstream portstream;
@@ -94,12 +144,15 @@ inline static std::string PortIntToString(int port)
     return portstream.str();
 }
 
-static int PortStringToInt(const std::string port)
+/* Convienience function as data sent only needs the int value
+ * and not a string
+ */
+static int PortStringToInt(const std::string& port)
 {
     int converted_port = -1;
     std::stringstream portstream(port);
     portstream >> converted_port;
-    
+
     if(portstream.bad())
     {
         return -1;
@@ -115,6 +168,7 @@ static RETCODE ReceiveAck(int socket)
 
     // Timeout at 1 second to wait for recv
     struct timeval time_value;
+    // Th 1 second time limit is defined below
     time_value.tv_sec = 1; // Should make this a config variable
     time_value.tv_usec = 0;
     setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&time_value, sizeof(time_value));
@@ -135,12 +189,16 @@ static RETCODE ReceiveAck(int socket)
         handshake.header.data_type != MESSAGE_TYPE::ACK ||
         _SERVER_VERSION != acknowledge.server_version)
     {
+        /* The __INET_BLACKLIST define can be set to block all 
+         * incoming connections from non-local IP addresses. It also sends
+         * a nastygram.
+         */
         #if __INET_BLACKLIST
         // Sniff any bad handshake attempts
         char* attempted_ack = reinterpret_cast<char*>(&handshake);
         attempted_ack[sizeof(INET_PACKAGE) + sizeof(ACKNOWLEDGE) - 1] = '\0';
         LOG_INFO("Acknowledge failed. Connection sent: ", attempted_ack);
-        
+
         // Non-block set for smooth receives and sends
         if(fcntl(socket, F_SETFL, fcntl(socket, F_GETFL) | O_NONBLOCK) < 0)
         {
@@ -154,8 +212,9 @@ static RETCODE ReceiveAck(int socket)
             LOG_INFO("More: ", more_buffer);
             memset(more_buffer, 0, sizeof(more_buffer));
         }
-        
-        if(0 > send(socket, "SUCK MY <b>ENTIRE</b> DICK", sizeof("SUCK MY <b>ENTIRE</b> DICK"), 0)) // Config file for custom blacklist message
+
+        if(0 > send(socket, "SUCK MY <b>ENTIRE</b> DICK",
+            sizeof("SUCK MY <b>ENTIRE</b> DICK"), 0)) // Config file for custom blacklist message
         {
             LOG_WARN("Could not send aggressive response!");
         }
@@ -168,7 +227,9 @@ static RETCODE ReceiveAck(int socket)
     return retcode;
 }
 
-// Client must SendAck immediately after connecting
+/* This must be called right after connecting -- it is called
+ * in the proper place in Connect()
+*/
 static RETCODE SendAck(int socket, INET_PACKAGE& handshake)
 {
     handshake.header.data_type = MESSAGE_TYPE::ACK;
@@ -180,12 +241,48 @@ static RETCODE SendAck(int socket, INET_PACKAGE& handshake)
     return RTN_OK;
 }
 
-
-// Event callback definitions
-typedef void (*ConnectDelegate)(const CONNECTION&);
-typedef void (*DisconnectDelegate)(const CONNECTION&);
-typedef void (*MessageDelegate)(const INET_PACKAGE*);
-typedef void (*StopDelegate)(void);
+/* Example function for a message callback would be
+ * static void SampleRecvMessage(const INET_PACKAGE* packet)
+ * {
+ *     std::cout << packet->header.connection.address
+ *               << " on "
+ *               << packet->header.connection.address << ":"
+ *               << packet->header.connection.port
+ *               << " has a payload of type: "
+ *               << packet->header.data_type
+ *               << " and size of: "
+ *               << packet->header.message_size
+ *               << " with message: "
+ * }
+ *
+ * and then can add the function to the hook
+ *
+ *   connection.m_OnReceive += SampoleRecvMessage;
+ *
+ * ------------------------------------
+ * A class function call would be
+ *
+ * class Example
+ * {
+ *     void ExampleCall(const INET_PACKAGE* packet)
+ *     {
+ *         std::cout << packet->header.connection.address
+ *               << " on "
+ *               << packet->header.connection.address << ":"
+ *               << packet->header.connection.port
+ *               << " has a payload of type: "
+ *               << packet->header.data_type
+ *               << " and size of: "
+ *               << packet->header.message_size
+ *               << " with message: "
+ *     }
+ * };
+ *
+ *
+ *
+ * Example ex;
+ * connection.m_OnReceive += [&](const INET_PACKAGE* packet){ ex.ExampleCall(packet) }
+ */
 
 // @TODO: Figure out how to pass queue reference rather than pointer
 class PollThread: public DaemonThread<int>
@@ -224,23 +321,25 @@ public:
         {
             return RTN_CONNECTION_FAIL;
         }
-        
+
         // Wait until send goes through
         m_SendQueue.Push(package);
         return RTN_OK;
     }
 
     // Send packed data -- structs without other references
+    // In other words the DATA must be coniguous
+    // Make a character array and copy bits into it, ok!?
     template<class DATA>
     RETCODE Send(const DATA& data, const CONNECTION& connection)
     {
         PROFILE_FUNCTION();
-        
+
         if(!m_Ready)
         {
-           return RTN_CONNECTION_FAIL; 
+           return RTN_CONNECTION_FAIL;
         }
-        
+
         INET_PACKAGE* package = new char[sizeof(DATA) + sizeof(INET_PACKAGE)];
         package->header.message_size = sizeof(DATA);
         package->header.connection = connection;
@@ -249,7 +348,7 @@ public:
         return RTN_OK;
     }
 
-    // Used by client to try and get data from queue 
+    // Used by client to try and get data from queue
     // User must delete message aftger use
     RETCODE Receive(INET_PACKAGE* message)
     {
@@ -273,7 +372,7 @@ public:
         int err = 0;
         int ret = 0;
         int timeout = 10; /* in milliseconds */
-        int maxevents = 64;
+        int maxevents = 64; /* max number of updates */
         struct epoll_event events[64];
 
         while(StopRequested() == false)
@@ -284,7 +383,7 @@ public:
 
             if (num_poll_events == 0)
             {
-                // timeout
+                // timeout so just continue and check again
                 continue;
             }
 
@@ -303,14 +402,16 @@ public:
                 break;
             }
 
-            for (int i = 0; i < num_poll_events; i++)
+            for (size_t event_index = 0;
+                 event_index < num_poll_events;
+                 event_index++)
             {
-                int fd = events[i].data.fd;
+                int fd = events[event_index].data.fd;
 
                 if (m_TCPSocket == fd)
                 {
                     /*
-                    * A new client is connecting to us...
+                    * A new client is connecting to us
                     */
                     if (RTN_OK != AcceptNewClient())
                     {
@@ -320,15 +421,20 @@ public:
                 }
 
                 /*
-                * We have event(s) from client, let's call `recv()` to read it.
+                * We have event(s) from client so read what they have to say
                 */
                 CONNECTION connection = m_FDMap[fd];
-                retcode = HandleEvent(connection, fd, events[i].events);
+                retcode =
+                    HandleEvent(connection, fd, events[event_index].events);
+
                 if(RTN_CONNECTION_FAIL == retcode)
                 {
                     // Send signal that it's not available for sending??
                 }
 
+                /* @TODO: change the sleep value to config so user can
+                 * determine how often to check for messages
+                 */
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
 
@@ -345,17 +451,22 @@ public:
         PROFILE_FUNCTION();
         RETCODE retcode = GetConnectionForSelf();
         retcode |= InitPoll();
-        // We add our own listening socket to pool to check for new connections
+
+        /* We add our own listening socket
+         * to the pool to check for new connections
+         */
         retcode |= AddFDToPoll(m_TCPSocket, EPOLLIN | EPOLLPRI);
         if(RTN_OK == retcode)
         {
-            // Ignore broken pipe signal to prevent send/read from causing errors
+            /* Ignore broken pipe signal to prevent
+             * send/read from causing errors
+             */
             signal(SIGPIPE, SIG_IGN);
 
-            // Everything set up lets-a-go!
+            /* Everything set up lets-a-go! */
             Start(0);
 
-            m_Ready = true;
+            m_Ready = true; // Nothing else can happen unles this is set
         }
 
     }
@@ -368,13 +479,18 @@ public:
         struct addrinfo *currentAddrInfo = nullptr;
         int getInfoStatus = 0;
         int yes = 1;
-        // Set how we want the results to come as
-        memset(&hints, 0, sizeof(hints));
-        hints.ai_family = AF_UNSPEC; // IPV4 or IPV6
-        hints.ai_socktype = SOCK_STREAM; // slower, yet reliable
-        hints.ai_flags = AI_PASSIVE; // fill in IP for me
 
-        // Get address for self
+        /* Set how we want the results to come as */
+        memset(&hints, 0, sizeof(hints));
+        hints.ai_family = AF_UNSPEC; /* IPV4 or IPV6 */
+
+        /* slower, yet reliable should be configurable */
+        hints.ai_socktype = SOCK_STREAM;
+
+        /* fill in IP for me */
+        hints.ai_flags = AI_PASSIVE;
+
+        /* Get address for self */
         if((getInfoStatus = getaddrinfo(nullptr, m_Port.c_str(), &hints, &returnedAddrInfo)) != 0)
         {
             LOG_ERROR("getaddrinfo error: ", gai_strerror(getInfoStatus));
@@ -384,7 +500,7 @@ public:
         {
             char accepted_address[INET6_ADDRSTRLEN];
 
-            // Get linked list of connections
+            /* Get linked list of connections */
             inet_ntop(returnedAddrInfo->ai_addr->sa_family,
                       get_in_addr((struct sockaddr *)&returnedAddrInfo),
                       accepted_address,
@@ -420,7 +536,7 @@ public:
             break;
         }
 
-        // Start listening for connections
+        /* Start listening for connections */
         if(-1 == listen(m_TCPSocket, 10))
         {
             LOG_ERROR("Failed to start listening on socket: ", m_TCPSocket);
@@ -433,9 +549,8 @@ public:
         CONNECTION self_connection;
         strncpy(self_connection.address, m_Address.c_str(), sizeof(self_connection.address));
         self_connection.port = PortStringToInt(m_Port);
-        m_OnServerConnect.Invoke(self_connection);
+        m_OnServerConnect(self_connection);
 
-        // Cleanup
         freeaddrinfo(returnedAddrInfo);
         if(nullptr == currentAddrInfo)
         {
@@ -445,13 +560,16 @@ public:
         return RTN_OK;
     }
 
+    /* Overload if you have a CONNECTION you want to connect to */
     RETCODE Connect(const CONNECTION& connection)
     {
         std::string port = PortIntToString(connection.port);
         return Connect(std::string(connection.address), port);
     }
 
-    // Can send to this connection using Send() with CONNECTION
+    /* Can send to this connection using Send() with CONNECTION
+     * using the address and port in the args
+     */
     RETCODE Connect(const std::string& address, const std::string& port)
     {
         PROFILE_FUNCTION();
@@ -514,16 +632,19 @@ public:
 
         freeaddrinfo(returnedAddrInfo);
 
-        // We must send handshake with server version
+        /*( We must send handshake with server version
+         * or they will reject us. Just a precaution to ensure that we
+         * need to update to the server data definitions and version
+         */
         ACKNOWLEDGE ack = {_SERVER_VERSION};
-        CONNECTION conn = {0, '\0'};
+        CONNECTION conn;
         INET_PACKAGE& handshake = *reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + sizeof(ACKNOWLEDGE)]);
         memcpy(handshake.header.connection.address,
             m_Address.c_str(),
             sizeof(handshake.header.connection.address));
         handshake.header.connection.port = m_PollFD;
         handshake.header.message_size = sizeof(ACKNOWLEDGE);
-        memcpy(handshake.payload, &ack, sizeof(ACKNOWLEDGE)); 
+        memcpy(handshake.payload, &ack, sizeof(ACKNOWLEDGE));
 
         // Send our server version to server to match
         RETCODE retcode = SendAck(connectedSocket, handshake);
@@ -553,6 +674,7 @@ public:
         return retcode;
     }
 
+    /* Stop listening, but don't destruct */
     RETCODE StopListeningForAccepts()
     {
         PROFILE_FUNCTION();
@@ -567,6 +689,7 @@ public:
         return RTN_OK;
     }
 
+    /* Handle both accepts, disconnects, and of course incoming messages */
     RETCODE HandleEvent(const CONNECTION& connection, int fd, uint32_t revents)
     {
         PROFILE_FUNCTION();
@@ -624,18 +747,24 @@ public:
             if (err != EAGAIN)
             {
                 /* Error */
-                LOG_WARN("Error receving data from connection: ", package->header.connection.address, " errono: ", strerror(errno));
+                LOG_WARN("Error receving data from connection: ",
+                         package->header.connection.address,
+                         " errono: ",
+                         strerror(errno));
+
                 RemoveConnection(fd, connection);
                 return RTN_CONNECTION_FAIL;
             }
 
         }
 
-        m_OnReceive.Invoke(package);
+        m_TotalDataRecv += package->header.message_size;
+        m_OnReceive(package);
         delete[] package;
         return RTN_OK;
     }
 
+    /* Pick up messages in the send queue  and send */
     RETCODE HandleSends(void)
     {
         PROFILE_FUNCTION();
@@ -645,18 +774,24 @@ public:
 
         while(m_SendQueue.TryPop(packet))
         {
-            std::unordered_map<CONNECTION,int>::iterator connection = m_ConnectionMap.find(packet->header.connection);
+            std::unordered_map<CONNECTION,int>::iterator connection =
+                m_ConnectionMap.find(packet->header.connection);
             if(connection != m_ConnectionMap.end())
             {
                 message_length = packet->header.message_size + sizeof(INET_PACKAGE);
                 while(message_length > 0)
                 {
-                    message_length -= send(connection->second, packet, message_length, 0);
+                    message_length -=
+                        send(connection->second, packet, message_length, 0);
                 }
+
+                m_TotalDataSent += message_length;
             }
             else
             {
-                LOG_WARN("Could not find: ", packet->header.connection.address, "sending failed!");
+                LOG_WARN("Could not find: ",
+                         packet->header.connection.address,
+                         "sending failed!");
             }
 
             delete packet;
@@ -665,6 +800,7 @@ public:
         return RTN_OK;
     }
 
+    /* Accept connects and require a handshake */
     RETCODE AcceptNewClient()
     {
         PROFILE_FUNCTION();
@@ -675,7 +811,7 @@ public:
         char accepted_address[INET6_ADDRSTRLEN];
         int err = 0;
 
-        CONNECTION connection = {0};
+        CONNECTION connection;
         ACKNOWLEDGE acknowledge = {0};
 
         accept_socket = accept(m_TCPSocket,
@@ -723,6 +859,7 @@ public:
             err = errno;
             if (err == EAGAIN)
             {
+                /* Socket busy so we just try again next time around */
                 return RTN_OK;
             }
 
@@ -733,6 +870,7 @@ public:
 
     }
 
+    /* Add file descriptor to poll so we can listen for events */
     RETCODE AddFDToPoll(int fd, uint32_t events)
     {
         PROFILE_FUNCTION();
@@ -758,7 +896,7 @@ public:
         return RTN_OK;
     }
 
-
+    /* Add connection to both m_FDMap and m_ConnectionMap for 2 way lookup */
     RETCODE AddConnection(int fd, const CONNECTION& connection, uint32_t events)
     {
         if(m_ConnectionMap.find(connection) != m_ConnectionMap.end())
@@ -767,9 +905,12 @@ public:
             return RTN_CONNECTION_FAIL;
         }
 
+    /* __INET_BLACKLIST define cuts out all non-local connections */
 #if __INET_BLACKLIST
         //Blacklist on outside connections -- remove later
-        if(0 != strncmp(connection.address, "192.168.0.", sizeof("192.168.0.") - 1))
+        if(0 != strncmp(connection.address,
+                        "192.168.0.",
+                        sizeof("192.168.0.") - 1))
         {
             close(fd);
             return RTN_CONNECTION_FAIL;
@@ -778,24 +919,28 @@ public:
 
         RETCODE retcode = AddFDToPoll(fd, events);
 
+        /* Assume fd is unique, right? right?? */
         m_ConnectionMap[connection] = fd;
         m_FDMap[fd] = connection;
 
-        m_OnClientConnect.Invoke(connection);
+        m_OnClientConnect(connection);
 
         return retcode;
     }
 
+    /* Disconnect a client from listening */
     RETCODE RemoveConnection(int fd, const CONNECTION& connection)
     {
         RETCODE retcode = RemoveFDFromPoll(fd);
         m_FDMap.erase(fd);
         m_ConnectionMap.erase(connection);
-        m_OnDisconnect.Invoke(connection);
+        m_OnDisconnect(connection);
 
         return retcode;
     }
 
+
+    /* Remove file descriptor from poll */
     RETCODE RemoveFDFromPoll(int fd)
     {
         PROFILE_FUNCTION();
@@ -826,6 +971,8 @@ public:
         return RTN_OK;
     }
 
+
+    /* Initalize poll for this INETMessenger instance */
     RETCODE InitPoll()
     {
         PROFILE_FUNCTION();
@@ -843,6 +990,7 @@ public:
         return RTN_OK;
     }
 
+    /* Remove all clients from polling and inovke disconnect for each client */
     RETCODE StopPoll()
     {
         RETCODE retcode = RTN_OK;
@@ -850,7 +998,8 @@ public:
         m_ReceiveQueue.done();
         Stop();
 
-        for(std::unordered_map<CONNECTION,int>::iterator iter = m_ConnectionMap.begin(); iter != m_ConnectionMap.end(); ++iter)
+        for(std::unordered_map<CONNECTION,int>::iterator iter =
+            m_ConnectionMap.begin(); iter != m_ConnectionMap.end(); ++iter)
         {
             retcode |= RemoveConnection(iter->second, iter->first);
         }
@@ -859,12 +1008,13 @@ public:
         m_ConnectionMap.clear();
         m_FDMap.clear();
 
-        m_OnStop.Invoke();
+        m_OnStop(0);
 
         return retcode;
 
     }
 
+    /* Getters/Setters */
     std::string GetTCPAddress()
     {
         return m_Address;
@@ -880,6 +1030,7 @@ public:
         return m_TCPSocket;
     }
 
+    /* private class members */
     bool m_Ready;
     int m_PollFD;
     int m_TCPSocket;
@@ -887,13 +1038,27 @@ public:
     std::string m_Address;
     TasQ<INET_PACKAGE*> m_SendQueue;
     TasQ<INET_PACKAGE*> m_ReceiveQueue;
+
+    /* Both need to be in step so we can look up either way */
     std::unordered_map<CONNECTION, int> m_ConnectionMap;
     std::unordered_map<int, CONNECTION> m_FDMap;
-    Hook<ConnectDelegate> m_OnClientConnect;
-    Hook<ConnectDelegate> m_OnServerConnect;
-    Hook<DisconnectDelegate> m_OnDisconnect;
-    Hook<MessageDelegate> m_OnReceive;
-    Hook<StopDelegate> m_OnStop;
+
+    /* Hooks which are called in the appropriate events.
+     * Users can define their own functions to be called when these
+     * events happen. See definition of Hook for examples.
+     */
+    Hook<const CONNECTION&> m_OnClientConnect;
+    Hook<const CONNECTION&> m_OnServerConnect;
+    Hook<const CONNECTION&> m_OnDisconnect;
+    Hook<const INET_PACKAGE*> m_OnReceive;
+    // @TODO: figure out how to template an argument pack with no args (void)
+    Hook<int> m_OnStop;
+
+public:
+
+    /* max of 18446.744073709553049 petabytes sent should be enough */
+    unsigned long long int m_TotalDataSent;
+    unsigned long long int m_TotalDataRecv;
 };
 
 

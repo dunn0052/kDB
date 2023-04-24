@@ -218,7 +218,7 @@ namespace CLI
             {
                 strncpy(value.o, token.c_str(), sizeof(value.o));
             }
-     
+
             // Now can get the rest of 0.0.0
             char ignore; // '.'
             if (stream >> value.f >> ignore >> value.r >> ignore >> value.i)
@@ -248,7 +248,7 @@ namespace CLI
             {
                 strncpy(value.o, token.c_str(), sizeof(value.o));
             }
-     
+
             // Now can get the rest of 0.0.0
             char ignore; // '.'
             if (stream >> value.r)
@@ -299,7 +299,7 @@ namespace CLI
                 return true;
             }
 
-            bool ParseArg(char* argument)
+            bool ParseArg(const char* argument)
             {
                 std::string parsedArgument(argument);
                 bool isArgGood = true;
@@ -324,7 +324,7 @@ namespace CLI
                 return true;
             }
 
-            RETCODE ParseCommandLineArguments(int argc, char* argv[])
+            RETCODE ParseCommandLineArguments(int argc, char const* const argv[])
             {
                 size_t argument_index = 0;
                 bool isArgGood = true;

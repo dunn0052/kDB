@@ -13,7 +13,7 @@ static void quitSignal(int sig)
     running = false;
 }
 
-static void StopListening(void)
+static void StopListening(int _)
 {
     LOG_INFO("Stopping Listener");
 }

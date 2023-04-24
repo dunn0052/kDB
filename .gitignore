@@ -67,3 +67,6 @@ PythonAPI/DBMap.py
 
 #profiler
 *.json
+
+# generated gtest
+_deps

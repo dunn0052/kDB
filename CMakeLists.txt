@@ -22,3 +22,5 @@ add_subdirectory(DBDebug)
 add_subdirectory(InstantiateDB)
 add_subdirectory(Listener)
 add_subdirectory(UpdateDaemon)
+
+add_subdirectory(test)

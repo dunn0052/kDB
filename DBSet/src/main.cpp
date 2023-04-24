@@ -60,7 +60,7 @@ int main(int argc, char* argv[])
                 LOG_INFO("Failed to read ", ofri.o, ".", ofri.f, ".", ofri.r, ".", ofri.i);
             }
         }
-        
+
     }
     else
     {

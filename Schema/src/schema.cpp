@@ -233,7 +233,7 @@ static RETCODE GenerateFieldHeader(FIELD_SCHEMA& field, std::ofstream& headerFil
 /*
     OBJECT.py
     class OBJECT:
-        
+
         FORMAT = "C struct format"
 
         def __init__(self, data:tuple):
@@ -641,7 +641,7 @@ static RETCODE AddToAllDBPy(OBJECT_SCHEMA& object_entry)
 
     RETURN_RETCODE_IF_NOT_OK(writeAllDBPy(out_lines));
 
-    return RTN_OK;    
+    return RTN_OK;
 }
 
 static RETCODE OpenDBMapFile(std::ofstream& headerStream)
@@ -871,7 +871,7 @@ static RETCODE GenerateObject(const OBJECT& objectName, const std::string& skmPa
                         " bytes at the end of the field");
                     return RTN_BAD_ARG;
                 }
-                
+
                 retcode |= AddBytePadding(out_object_entry, bytes_needed_for_byte_bounds);
 
             }

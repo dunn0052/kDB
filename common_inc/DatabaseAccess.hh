@@ -182,7 +182,7 @@ class DatabaseAccess
                     {
                         return RTN_BAD_ARG;
                     }
-                    
+
                     break;
                 }
                 default:

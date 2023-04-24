@@ -4,7 +4,6 @@
 #include <future>
 #include <chrono>
 
-
 /*
  * Class that encapsulates promise and future object and
  * provides API to set exit signal for the thread
@@ -22,7 +21,7 @@ public:
         m_Running(false), m_RunningThread(nullptr), m_futureObj(m_exitSignal.get_future())
         { }
 
-    DaemonThread(DaemonThread && obj)
+    DaemonThread(DaemonThread&& obj)
         : m_Running(std::move(obj.m_Running)), m_RunningThread(std::move(obj.m_RunningThread)), m_exitSignal(std::move(obj.m_exitSignal)), m_futureObj(std::move(obj.m_futureObj))
         { }
 
@@ -42,11 +41,22 @@ public:
     // Thread function to be executed by thread
     void operator()()
     {
+        if(!m_Running)
+        {
+            return;
+        }
+
         execute();
     }
 
     void Start(ARGS... args)
     {
+
+        if(!m_Running)
+        {
+            return;
+        }
+
         m_RunningThread = new std::thread([this, args...]()
         {
                 this->execute(args...);
@@ -73,6 +83,7 @@ public:
         if(m_Running)
         {
             m_Running = false;
+            // Issues signal for execute() to stop
             m_exitSignal.set_value();
             m_RunningThread->join();
             if(nullptr != m_RunningThread)

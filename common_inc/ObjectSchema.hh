@@ -19,7 +19,7 @@ struct FIELD_SCHEMA
 inline std::istream& operator >> (std::istream& input_stream,
     FIELD_SCHEMA& field_entry)
 {
-    return input_stream 
+    return input_stream
         >> field_entry.fieldNumber
         >> field_entry.fieldName
         >> field_entry.fieldType
@@ -29,7 +29,7 @@ inline std::istream& operator >> (std::istream& input_stream,
 inline std::ostream& operator << (std::ostream& output_stream,
     FIELD_SCHEMA& field_entry)
 {
-    return output_stream 
+    return output_stream
         << field_entry.fieldNumber
         << field_entry.fieldName
         << field_entry.fieldType

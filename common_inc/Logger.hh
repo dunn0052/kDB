@@ -111,8 +111,8 @@ namespace Log
 
 #if __LOG_SHOW_TIME
             time_t currentTime = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-            internalStream 
-                << "[" 
+            internalStream
+                << "["
                 << strtok(std::ctime(&currentTime), "\n")
                 << "]";
 #endif

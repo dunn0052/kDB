@@ -56,6 +56,33 @@ static void ClientRequest(const INET_PACKAGE* package)
     g_incoming_changes.Push(request);
 }
 
+class TestRecv
+{
+    public:
+    void TesetClassRecv(const INET_PACKAGE* package)
+    {
+        LOG_DEBUG("Client ", package->header.connection.address, ":", package->header.connection.port, " request");
+
+        INET_PACKAGE* request = reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_HEADER) + package->header.message_size]);
+        request->header = package->header;
+        memcpy(request->payload, package->payload, request->header.message_size);
+        OFRI* ofri = reinterpret_cast<OFRI*>(request->payload);
+
+        OBJECT_SCHEMA object_info;
+        if(RTN_OK != TryGetObjectInfo(std::string(ofri->o), object_info))
+        {
+            LOG_WARN("Could not open: ", ofri->o);
+            return;
+        }
+
+        if(object_info.numberOfRecords < ofri->r)
+        {
+            LOG_WARN("Invalid record: ", ofri->r, " > max: ", object_info.numberOfRecords);
+            return;
+        }
+
+    }
+};
 
 int main(int argc, char* argv[])
 {
@@ -86,7 +113,9 @@ int main(int argc, char* argv[])
 
     LOG_INFO("Connection on ", connection.GetTCPAddress(), ":", connection.GetTCPPort());
 
-    connection.m_OnReceive += ClientRequest;
+    TestRecv test;
+
+    connection.m_OnReceive += [&](const INET_PACKAGE* package){ test.TesetClassRecv(package); };
     connection.m_OnClientConnect += clientConnect;
     connection.m_OnDisconnect += clientDisconnect;
 
