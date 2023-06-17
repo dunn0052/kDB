@@ -432,12 +432,12 @@ public:
                     // Send signal that it's not available for sending??
                 }
 
-                /* @TODO: change the sleep value to config so user can
-                 * determine how often to check for messages
-                 */
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
 
+            /* @TODO: change the sleep value to config so user can
+                * determine how often to check for messages
+                */
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
         }
 

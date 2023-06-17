@@ -35,62 +35,8 @@ public:
             {
                 data_recv += incoming_request->header.message_size;
                 LOG_DEBUG("Total bytes recevied: ", data_recv);
-                OFRI ofri = {0};
-                memcpy(&ofri, incoming_request->payload, sizeof(OFRI));
-                LOG_INFO("GOT OFRI: ", ofri.o, ".", ofri.f, ".", ofri.r, ".", ofri.i);
 
-                // Try and get DB access otherwise fail
-                if(m_MonitoredObjects.find(ofri.o) == m_MonitoredObjects.end())
-                {
-                    LOG_DEBUG("Did not find object ", ofri.o, ". Adding to monitored objects");
-
-                    DatabaseAccess db_access = DatabaseAccess(ofri.o);
-                    if(db_access.IsValid())
-                    {
-                        m_MonitoredObjects.emplace(ofri.o, DatabaseAccess(ofri.o));
-                    }
-                    else
-                    {
-                        LOG_WARN("Could not open object: ", ofri.o);
-                        continue;
-                    }
-                }
-
-                // Check if a value was included which is extra data
-                if(incoming_request->header.message_size > sizeof(OFRI))
-                {
-                    incoming_value = new char[incoming_request->header.message_size - sizeof(OFRI) + 1]; // +1 for null terminator
-                    memcpy(incoming_value, incoming_request->payload + sizeof(OFRI), sizeof(incoming_value));
-                    incoming_value[sizeof(incoming_value)] = '\0'; // For printing
-                }
-
-                DatabaseAccess& access = m_MonitoredObjects.at(ofri.o);
-                char* p_read_pointer = access.Get(ofri.r);
-                if(nullptr == p_read_pointer)
-                {
-                    LOG_WARN("Could not find record: ", ofri.r);
-                    continue;
-                }
-
-                if(nullptr != incoming_value)
-                {
-
-                    if(IS_RETCODE_OK(access.WriteValue(ofri, incoming_value)))
-                    {
-                        LOG_INFO("Updated ", ofri.o, ".", ofri.f, ".",
-                                  ofri.r, ".", ofri.i, " = ",
-                                  std::string(incoming_value));
-                    }
-                    else
-                    {
-                        LOG_INFO("Failed to update ", ofri.o, ".", ofri.f, ".",
-                                  ofri.r, ".", ofri.i, " with ",
-                                  std::string(incoming_value));
-                    }
-
-                    delete[] incoming_value;
-                    incoming_value = nullptr;
-                }
+                ProcessIncomingRequest(incoming_request);
 
                 OBJECT_SCHEMA object_info;
                 if(RTN_OK != TryGetObjectInfo(std::string(ofri.o), object_info))
@@ -119,6 +65,129 @@ public:
 
 private:
 
+    RETCODE GetOFRIFromPayload(INET_PACKAGE* package, OFRI* out_ofri)
+    {
+
+        if(sizeof(OFRI) < package->header.message_size)
+        {
+            return RTN_BAD_ARG;
+        }
+
+        out_ofri = reinterpret_cast<OFRI*>(package->payload);
+
+        return RTN_OK;
+    }
+
+    RETCODE GetValueFromPayload(INET_PACKAGE* package, char* out_value)
+    {
+        if(sizeof(OFRI) <= package->header.message_size)
+        {
+            return RTN_BAD_ARG;
+        }
+
+        out_value = package->payload + sizeof(OFRI);
+    }
+
+    RETCODE ProcessIncomingRequest(INET_PACKAGE* incoming_request)
+    {
+
+        RETCODE retcode = RTN_OK;
+        switch(incoming_request->header.data_type)
+        {
+            case MESSAGE_TYPE::DB_READ:
+            {
+                OFRI *p_ofri = nullptr;
+                retcode |= GetOFRIFromPayload(incoming_request, p_ofri);
+
+                if(!IS_RETCODE_OK(retcode))
+                {
+                    LOG_WARN("Could not translate OFRI from: ", incoming_request->header.connection.address);
+                }
+            }
+            case MESSAGE_TYPE::DB_WRITE:
+            {
+                OFRI *p_ofri = nullptr;
+                char* incoming_value = nullptr;
+                retcode |= GetOFRIFromPayload(incoming_request, p_ofri);
+                if(!IS_RETCODE_OK(retcode))
+                {
+                    LOG_WARN("Could not translate OFRI from: ", incoming_request->header.connection.address);
+                }
+
+                retcode |= GetValueFromPayload(incoming_request, incoming_value);
+                if(!IS_RETCODE_OK(retcode))
+                {
+                    LOG_WARN("Could not get updated value for OFRI: ", ofri.o, ".", ofri.f, ".", ofri.r, ".", ofri.i);
+                }
+
+                retcode |= UpdateValue(p_ofri, incoming_value);
+                if(!IS_RETCODE_OK(retcode))
+                {
+                    LOG_WARN("Could not update value for OFRI:", ofri.o, ".", ofri.f, ".", ofri.r, ".", ofri.i);
+                }
+
+                /* create and send back info */
+                if(RTN_OK != NotifySubscribers(object_info, ofri, p_read_pointer, outgoing_objects, data_sent))
+                {
+                    LOG_WARN("Could not notify subscribers of changes to: ", ofri.o, ".", ofri.r);
+                }
+            }
+            case MESSAGE_TYPE::TEXT:
+            case MESSAGE_TYPE::NONE:
+            default:
+            {
+                LOG_DEBUG("Received an invalid request type: ", incoming_request->header.data_type);
+                retcode |= RTN_BAD_ARG;
+            }
+
+            return retcode;
+        }
+
+    }
+
+    RETCODE TryGetDatabaseAccess(const OFRI& ofri, DatabaseAccess& out_access)
+    {
+        const std::unordered_map<std::string, DatabaseAccess>::iterator& monitoredObject
+            = m_MonitoredObjects.find(ofri.o);
+
+        if(m_MonitoredObjects.end() == monitoredObject)
+        {
+            DatabaseAccess access = DatabaseAccess(ofri.o);
+            if(!access.IsValid())
+            {
+                return RTN_NOT_FOUND;
+            }
+
+            m_MonitoredObjects.emplace(ofri.o, access);
+        }
+
+        out_access = m_MonitoredObjects.at(ofri.o);
+
+        return RTN_OK;
+    }
+
+    RETCODE UpdateValue(const OFRI* p_ofri, char* updated_value)
+    {
+        DatabaseAccess access;
+
+        RETCODE retcode = TryGetDatabaseAccess(*p_ofri, access);
+
+        if(IS_RETCODE_OK(access.WriteValue(*p_ofri, updated_value)))
+        {
+            LOG_INFO("Updated ", p_ofri->o, ".", p_ofri->f, ".",
+                        p_ofri->r, ".", p_ofri->i, " = ",
+                        std::string(updated_value));
+        }
+        else
+        {
+            LOG_INFO("Failed to update ", p_ofri->o, ".", p_ofri->f, ".",
+                        p_ofri->r, ".", p_ofri->i, " with ",
+                        std::string(updated_value));
+        }
+
+        return RTN_OK;
+    }
+
     RETCODE NotifySubscribers(const OBJECT_SCHEMA& object_info, const OFRI& ofri, char* updated_object, TasQ<INET_PACKAGE*>* outgoing_objects, unsigned long long& out_data_total)
     {
         std::unordered_map<OFRI, std::vector<CONNECTION>>::iterator subscribers = m_Subscriptions.find(ofri);
@@ -137,7 +206,7 @@ private:
                     object_info.objectSize]);
 
             outgoing_package->header.connection = connection;
-            outgoing_package->header.data_type = MESSAGE_TYPE::DB;
+            outgoing_package->header.data_type = MESSAGE_TYPE::DB_READ;
             outgoing_package->header.message_size = object_info.objectSize;
 
             memcpy(outgoing_package->payload, updated_object, object_info.objectSize);

@@ -17,7 +17,15 @@ class DatabaseAccess
 {
 
     public:
-        DatabaseAccess(OBJECT& object)
+
+        DatabaseAccess() :
+            m_DBAddress(nullptr), m_Size(0), m_ObjectName(""),
+            m_Object(), m_IsOpen(false)
+        {
+
+        }
+
+        DatabaseAccess(const OBJECT& object)
             : m_DBAddress(nullptr), m_Size(0), m_ObjectName(object),
               m_Object(dbSizes[m_ObjectName]), m_IsOpen(false)
         {
@@ -39,6 +47,16 @@ class DatabaseAccess
             Open();
         }
 
+        DatabaseAccess(DatabaseAccess& other)
+            : m_DBAddress(other.m_DBAddress),
+              m_Size(other.m_Size),
+              m_ObjectName(other.m_ObjectName),
+              m_Object(other.m_Object),
+              m_IsOpen(other.m_IsOpen)
+        {
+            Open();
+        }
+
         DatabaseAccess& operator=(DatabaseAccess&& other)
         {
             m_DBAddress = std::move(other.m_DBAddress);
@@ -46,6 +64,19 @@ class DatabaseAccess
             m_ObjectName = std::move(other.m_ObjectName);
             m_Object = std::move(other.m_Object);
             m_IsOpen = std::move(other.m_IsOpen);
+
+            Open();
+
+            return *this;
+        }
+
+        DatabaseAccess& operator=(DatabaseAccess& other)
+        {
+            m_DBAddress = other.m_DBAddress;
+            m_Size = other.m_Size;
+            m_ObjectName = other.m_ObjectName;
+            m_Object = other.m_Object;
+            m_IsOpen = other.m_IsOpen;
 
             Open();
 
@@ -290,8 +321,14 @@ class DatabaseAccess
 
         RETCODE Open()
         {
-            int fd = OpenDatabase();
             RETCODE retcode = RTN_OK;
+
+            if(m_IsOpen)
+            {
+                return retcode;
+            }
+
+            int fd = OpenDatabase();
             if( 0 > fd )
             {
                 std::cout << "Failed to open: " << m_ObjectName << "\n";

@@ -77,7 +77,7 @@ class WriteThread: public DaemonThread<TasQ<INET_PACKAGE*>*>
                 {
                     message = reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + sizeof(OFRI)]);
                     message->header.message_size = sizeof(OFRI);
-                    message->header.data_type = MESSAGE_TYPE::DB;
+                    message->header.data_type = MESSAGE_TYPE::DB_WRITE;
                     memcpy(message->payload, &ofri, sizeof(OFRI));
                 }
                 else
