@@ -1,6 +1,6 @@
 #! /usr/bin/bash
 
-source config/.kdb_env
+source .kdb_env
 
 if [[ "$*" == *"-d"* ]]
   then

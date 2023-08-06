@@ -19,13 +19,10 @@ class MonitorThread: public DaemonThread<TasQ<INET_PACKAGE*>*, TasQ<INET_PACKAGE
 public:
     void execute(TasQ<INET_PACKAGE*>* incoming_objects, TasQ<INET_PACKAGE*>* outgoing_objects)
     {
-        //DatabaseAccess db_object = DatabaseAccess(objectName);
-
-        // Get pointer to first record N
-        //char* p_read_pointer = db_object.Get(min_record);
-
+        RETCODE retcode = RTN_OK;
         INET_PACKAGE* incoming_request;
-        char* incoming_value = nullptr;
+        INET_PACKAGE* outgoing_request;
+
         unsigned long long data_recv = 0;
         unsigned long long data_sent = 0;
 
@@ -36,36 +33,28 @@ public:
                 data_recv += incoming_request->header.message_size;
                 LOG_DEBUG("Total bytes recevied: ", data_recv);
 
-                ProcessIncomingRequest(incoming_request);
-
-                OBJECT_SCHEMA object_info;
-                if(RTN_OK != TryGetObjectInfo(std::string(ofri.o), object_info))
+                retcode = ProcessIncomingRequest(incoming_request, outgoing_request);
+                if(not IS_RETCODE_OK(retcode))
                 {
-                    LOG_WARN("Could not find object: ", ofri.o);
+                    LOG_WARN("Could not gather returned info");
+                    delete incoming_request;
                     continue;
                 }
 
-                PrintDBObject(object_info, p_read_pointer, ofri.r);
-
-                /* create and send back info */
-                if(RTN_OK != NotifySubscribers(object_info, ofri, p_read_pointer, outgoing_objects, data_sent))
-                {
-                    LOG_WARN("Could not notify subscribers of changes to: ", ofri.o, ".", ofri.r);
-                }
-
+                outgoing_objects->Push(outgoing_request);
                 LOG_DEBUG("Total bytes sent: ", data_sent);
-
-                delete incoming_request;
             }
 
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
 
+        LOG_INFO("Ending update daemon thread!");
+
     }
 
 private:
 
-    RETCODE GetOFRIFromPayload(INET_PACKAGE* package, OFRI* out_ofri)
+    RETCODE GetOFRIFromPayload(INET_PACKAGE* package, OFRI& out_ofri)
     {
 
         if(sizeof(OFRI) < package->header.message_size)
@@ -73,7 +62,7 @@ private:
             return RTN_BAD_ARG;
         }
 
-        out_ofri = reinterpret_cast<OFRI*>(package->payload);
+        out_ofri = *reinterpret_cast<OFRI*>(package->payload);
 
         return RTN_OK;
     }
@@ -88,7 +77,7 @@ private:
         out_value = package->payload + sizeof(OFRI);
     }
 
-    RETCODE ProcessIncomingRequest(INET_PACKAGE* incoming_request)
+    RETCODE ProcessIncomingRequest(INET_PACKAGE* incoming_request, INET_PACKAGE* outgoing_request)
     {
 
         RETCODE retcode = RTN_OK;
@@ -96,41 +85,50 @@ private:
         {
             case MESSAGE_TYPE::DB_READ:
             {
-                OFRI *p_ofri = nullptr;
-                retcode |= GetOFRIFromPayload(incoming_request, p_ofri);
+                OFRI ofri = {0};
+                char* p_value = nullptr;
 
+                retcode |= GetOFRIFromPayload(incoming_request, ofri);
                 if(!IS_RETCODE_OK(retcode))
                 {
                     LOG_WARN("Could not translate OFRI from: ", incoming_request->header.connection.address);
+                    return retcode;
                 }
+
+                DatabaseAccess access;
+                if(not TryGetDatabaseAccess(ofri, access))
+                {
+                    LOG_WARN("Could not open database for object: ", ofri.o);
+                    return retcode & RTN_NOT_FOUND;
+                }
+
+                p_value = access.Get(ofri);
+                if(nullptr == p_value)
+                {
+                    LOG_WARN("Could not get value for ofri: ", ofri);
+                    return retcode & RTN_NULL_OBJ;
+                }
+
+                OBJECT_SCHEMA object_schema;
+                if(not TryGetObjectInfo(ofri.o, object_schema))
+                {
+                    LOG_WARN("Could not get object schema for ofri: ", ofri);
+                    return retcode & RTN_NOT_FOUND;
+                }
+
+                object_schema.fields[ofri.f].fieldSize;
+                INET_PACKAGE* outgoing_request = reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + sizeof(object_schema.fields[ofri.f].fieldSize)]);
+                memcpy(&outgoing_request->header.connection, &incoming_request->header.connection, sizeof(INET_HEADER));
+                outgoing_request->header.data_type = MESSAGE_TYPE::DB_READ;
+                outgoing_request->header.message_size = object_schema.fields[ofri.f].fieldSize;
+                memcpy(&outgoing_request->payload, p_value, sizeof(object_schema.fields[ofri.f].fieldSize));
+
+
+                return retcode;
             }
             case MESSAGE_TYPE::DB_WRITE:
             {
-                OFRI *p_ofri = nullptr;
-                char* incoming_value = nullptr;
-                retcode |= GetOFRIFromPayload(incoming_request, p_ofri);
-                if(!IS_RETCODE_OK(retcode))
-                {
-                    LOG_WARN("Could not translate OFRI from: ", incoming_request->header.connection.address);
-                }
-
-                retcode |= GetValueFromPayload(incoming_request, incoming_value);
-                if(!IS_RETCODE_OK(retcode))
-                {
-                    LOG_WARN("Could not get updated value for OFRI: ", ofri.o, ".", ofri.f, ".", ofri.r, ".", ofri.i);
-                }
-
-                retcode |= UpdateValue(p_ofri, incoming_value);
-                if(!IS_RETCODE_OK(retcode))
-                {
-                    LOG_WARN("Could not update value for OFRI:", ofri.o, ".", ofri.f, ".", ofri.r, ".", ofri.i);
-                }
-
-                /* create and send back info */
-                if(RTN_OK != NotifySubscribers(object_info, ofri, p_read_pointer, outgoing_objects, data_sent))
-                {
-                    LOG_WARN("Could not notify subscribers of changes to: ", ofri.o, ".", ofri.r);
-                }
+                LOG_INFO("Got write request from", incoming_request->header.connection);
             }
             case MESSAGE_TYPE::TEXT:
             case MESSAGE_TYPE::NONE:
@@ -188,13 +186,19 @@ private:
         return RTN_OK;
     }
 
-    RETCODE NotifySubscribers(const OBJECT_SCHEMA& object_info, const OFRI& ofri, char* updated_object, TasQ<INET_PACKAGE*>* outgoing_objects, unsigned long long& out_data_total)
+#if 0
+
+    RETCODE NotifySubscribers(const OFRI& ofri, TasQ<INET_PACKAGE*>* outgoing_objects, unsigned long long& out_data_total)
     {
         std::unordered_map<OFRI, std::vector<CONNECTION>>::iterator subscribers = m_Subscriptions.find(ofri);
         if(m_Subscriptions.end() == subscribers)
         {
             return RTN_NOT_FOUND;
         }
+
+
+        OBJECT_SCHEMA object_info;
+        TryGetObjectInfo(ofri.o, object_info);
 
         for(CONNECTION& connection : subscribers->second)
         {
@@ -219,7 +223,7 @@ private:
 
         return RTN_OK;
     }
-
+#endif
     RETCODE RemoveSubscriber(CONNECTION& removal_connection, const OFRI& ofri)
     {
 

@@ -52,7 +52,7 @@ public:
     void Start(ARGS... args)
     {
 
-        if(!m_Running)
+        if(m_Running)
         {
             return;
         }

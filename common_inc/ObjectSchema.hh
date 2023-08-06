@@ -5,6 +5,9 @@
 #include <iostream>
 #include <vector>
 
+/*
+   Used to find field data in raw form.
+*/
 struct FIELD_SCHEMA
 {
     size_t fieldNumber;
@@ -36,6 +39,10 @@ inline std::ostream& operator << (std::ostream& output_stream,
         << field_entry.numElements;
 }
 
+/*
+   Structure of an object.
+   Can be used to find fields in raw data.
+*/
 struct OBJECT_SCHEMA
 {
     size_t objectNumber;

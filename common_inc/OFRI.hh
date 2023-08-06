@@ -3,6 +3,7 @@
 
 #include <string>
 #include <cstring>
+#include <ostream>
 
 constexpr unsigned int OBJECT_NAME_LEN = 20;
 
@@ -11,7 +12,8 @@ typedef unsigned int FIELD;
 typedef unsigned int RECORD;
 typedef unsigned int INDEX;
 
-struct OFRI // Specific quanta of data
+/* Address of data in DB */
+struct OFRI
 {
     OBJECT o;
     FIELD f;
@@ -26,6 +28,19 @@ struct OFRI // Specific quanta of data
                 i == other.i;
     }
 };
+
+inline std::ostream& operator << (std::ostream& output_stream,
+    const OFRI& ofri)
+{
+    return output_stream
+        << ofri.o
+        << "."
+        << ofri.f
+        << "."
+        << ofri.r
+        << "."
+        << ofri.i;
+}
 
 struct OR // Refence specific object
 {

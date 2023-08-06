@@ -64,6 +64,20 @@ class TestRecv
         LOG_DEBUG("Client ", package->header.connection.address, ":", package->header.connection.port, " request");
 
         INET_PACKAGE* request = reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_HEADER) + package->header.message_size]);
+
+        if(package->header.data_type == MESSAGE_TYPE::TEXT)
+        {
+            LOG_INFO("Client, ", package->header.connection, " says: ", package->payload);
+            return;
+        }
+
+
+        if(package->header.data_type == MESSAGE_TYPE::DB_READ)
+        {
+            LOG_INFO("Client ", package->header.connection, " read value: ", package->payload);
+            return;
+        }
+
         request->header = package->header;
         memcpy(request->payload, package->payload, request->header.message_size);
         OFRI* ofri = reinterpret_cast<OFRI*>(request->payload);
@@ -81,6 +95,8 @@ class TestRecv
             return;
         }
 
+        LOG_INFO("OFRI: ", *reinterpret_cast<OFRI*>(request->payload));
+
     }
 };
 
@@ -93,7 +109,7 @@ int main(int argc, char* argv[])
     CLI::CLI_FlagArgument helpArg("-h", "Shows usage", false);
 
     parse.AddArg(portArg)
-        .AddArg(helpArg);
+         .AddArg(helpArg);
 
     RETCODE retcode = parse.ParseCommandLineArguments(argc, argv);
 

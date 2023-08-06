@@ -1,0 +1,5 @@
+export KDB_INSTALL_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )/
+echo "kDB install directory:" $KDB_INSTALL_DIR
+
+export KDB_INET_ADDRESS=$( ifconfig | grep -oP "inet 192\.\d{1,3}\.\d{1,3}\.\d{1,3}" )
+echo "kDB address:" $KDB_INET_ADDRESS

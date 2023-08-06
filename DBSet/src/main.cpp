@@ -6,20 +6,25 @@
 #include <DatabaseAccess.hh>
 #include <INETMessenger.hh>
 
+#include <pthread_profiler.hh>
+
 static RETCODE UpdateDBValue(OFRI& ofri, const std::string& value)
 {
+    PROFILE_FUNCTION();
     DatabaseAccess db_object = DatabaseAccess(ofri.o);
     return db_object.WriteValue(ofri, value);
 }
 
 static RETCODE ReadDBValue(OFRI& ofri, std::string& value)
 {
+    PROFILE_FUNCTION();
     DatabaseAccess db_object = DatabaseAccess(ofri.o);
     return db_object.ReadValue(ofri, value);
 }
 
 int main(int argc, char* argv[])
 {
+    PROFILE_FUNCTION();
     CLI::Parser parse("DBSet", "Update value in object.");
     CLI::CLI_OFRIArgument ofriArg("--ofri", "OBJECT.0.0.0", true);
     CLI::CLI_StringArgument valueArg("=", "Value update");

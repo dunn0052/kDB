@@ -23,7 +23,7 @@ constexpr unsigned int _SERVER_VERSION = 2;
 #include <DaemonThread.hh>
 #include <TasQ.hh>
 #include <Hook.hh>
-#include <profiler.hh>
+#include <pthread_profiler.hh>
 #include <Logger.hh>
 #include <ConfigValues.hh>
 #include <Constants.hh>
@@ -45,6 +45,7 @@ constexpr unsigned int _SERVER_VERSION = 2;
 #include <signal.h>
 #include <sys/mman.h>
 #include <sstream>
+#include <ostream>
 
 /* CONNECTION is the struct we hold information on connections with */
 struct CONNECTION
@@ -82,6 +83,15 @@ namespace std
             return std::hash<std::string>()(key.address) << 1 ^ key.port;
         }
     };
+}
+
+inline std::ostream& operator << (std::ostream& output_stream,
+    const CONNECTION& connection)
+{
+    return output_stream
+        << connection.address
+        << ":"
+        << connection.port;
 }
 
 /* -- INET_HEADER --

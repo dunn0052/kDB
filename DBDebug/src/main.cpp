@@ -5,10 +5,13 @@
 #include <CLI.hh>
 #include <Constants.hh>
 
+#include <pthread_profiler.hh>
+
 static RETCODE PrintObjectInfo(const OBJECT&);
 
 int main(int argc, char* argv[])
 {
+    PROFILE_FUNCTION();
     CLI::Parser parser("Debug kDB database and schema");
     CLI::CLI_OBJECTArgument objArg("-o", "Name of object");
     CLI::CLI_FlagArgument allArg("-a", "Get info on all registered objects");
@@ -62,7 +65,7 @@ int main(int argc, char* argv[])
 
 static RETCODE PrintObjectInfo(const OBJECT& obj)
 {
-
+    PROFILE_FUNCTION();
     RETCODE retcode = RTN_OK;
     OBJECT_SCHEMA objSchema;
     RETURN_RETCODE_IF_NOT_OK(TryGetObjectInfo(obj, objSchema));

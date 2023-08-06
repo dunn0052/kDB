@@ -11,6 +11,7 @@
 
 #include <allDBs.hh>
 
+#include <pthread_profiler.hh>
 
 Database::Database(const std::string& file_path = "")
     : m_DBFilePath(file_path)
@@ -25,6 +26,7 @@ Database::~Database()
 
 int Database::OpenDatabase(const OBJECT& objectName)
 {
+    PROFILE_FUNCTION();
     std::stringstream filepath;
     // Get relative path
     filepath << m_DBFilePath << objectName << DB_EXT;
@@ -35,6 +37,7 @@ int Database::OpenDatabase(const OBJECT& objectName)
 
 inline char* MapObject(int fd, off_t size)
 {
+    PROFILE_FUNCTION();
     char *p_return = static_cast<char*>( mmap(nullptr, size,
             PROT_READ | PROT_WRITE, MAP_SHARED,
             fd, 0) );
@@ -49,6 +52,7 @@ inline char* MapObject(int fd, off_t size)
 
 RETCODE Database::Open(const OBJECT& objectName)
 {
+    PROFILE_FUNCTION();
     int fd = OpenDatabase(objectName);
 
     RETCODE retcode = RTN_OK;
@@ -91,6 +95,7 @@ RETCODE Database::Open(const OBJECT& objectName)
 
 RETCODE Database::Close(const OBJECT& objectName)
 {
+    PROFILE_FUNCTION();
     int error = 0;
 
     auto mapIterator = m_ObjectMemMap.find(std::string(objectName));
@@ -113,6 +118,7 @@ RETCODE Database::Close(const OBJECT& objectName)
 
 char* Database::GetObjectMem(const OBJECT& objectName)
 {
+    PROFILE_FUNCTION();
     auto mapIterator = m_ObjectMemMap.find(std::string(objectName));
 
     if( mapIterator != m_ObjectMemMap.end() )

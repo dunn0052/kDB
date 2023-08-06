@@ -9,8 +9,11 @@
 #include <Logger.hh>
 #include <ConfigValues.hh>
 
+#include <pthread_profiler.hh>
+
 static RETCODE GenerateDatabaseFile(const OBJECT& object_name, const std::string& dbPath)
 {
+    PROFILE_FUNCTION();
     RETCODE retcode = RTN_OK;
     std::stringstream filepath;
     filepath << dbPath <<  object_name << DB_EXT;
@@ -54,6 +57,7 @@ static RETCODE GenerateDatabaseFile(const OBJECT& object_name, const std::string
 
 int main(int argc, char* argv[])
 {
+    PROFILE_FUNCTION();
     CLI::Parser parse("InstantiateDB", "Generate and update db files");
     CLI::CLI_OBJECTArgument objectArg("--object", "Name of db object to generate");
     CLI::CLI_FlagArgument allArg("-a", "Generate all db files");

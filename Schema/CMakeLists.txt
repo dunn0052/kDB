@@ -14,8 +14,9 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
   __LOG_ENABLE
-  #__LOG_SHOW_LINE 
-  __LOG_SHOW_COLOR )
+  #__LOG_SHOW_LINE
+  __LOG_SHOW_COLOR
+  __ENABLE_PROFILING )
 
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
 

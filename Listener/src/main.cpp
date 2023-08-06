@@ -5,6 +5,8 @@
 #include <TasQ.hh>
 #include <MessageTypes.hh>
 
+#include <pthread_profiler.hh>
+
 static bool running = true;
 
 static void quitSignal(int sig)
@@ -77,7 +79,7 @@ class WriteThread: public DaemonThread<TasQ<INET_PACKAGE*>*>
                 {
                     message = reinterpret_cast<INET_PACKAGE*>(new char[sizeof(INET_PACKAGE) + sizeof(OFRI)]);
                     message->header.message_size = sizeof(OFRI);
-                    message->header.data_type = MESSAGE_TYPE::DB_WRITE;
+                    message->header.data_type = MESSAGE_TYPE::DB_READ;
                     memcpy(message->payload, &ofri, sizeof(OFRI));
                 }
                 else
@@ -146,6 +148,7 @@ int main(int argc, char* argv[])
             {
                 LOG_WARN("Couldn't connect to ",
                     connection.GetTCPAddress(), ":", connectionPortArg.GetValue());
+                return retcode;
             }
             LOG_INFO("Connected to ", connection.GetTCPAddress(),  ":", connectionPortArg.GetValue(), " with socket: ",
                  connection.GetTCPSocket());

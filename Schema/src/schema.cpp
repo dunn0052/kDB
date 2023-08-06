@@ -6,9 +6,12 @@
 #include <bits/stdc++.h>
 #include <ConfigValues.hh>
 
+#include <pthread_profiler.hh>
+
 /* Object info */
 RETCODE ParseObjectEntry(std::istringstream& line, OBJECT_SCHEMA& out_object)
 {
+    PROFILE_FUNCTION();
     line >> out_object;
     if( line.fail() )
     {
@@ -22,6 +25,7 @@ RETCODE ParseObjectEntry(std::istringstream& line, OBJECT_SCHEMA& out_object)
 /* Field info */
 RETCODE ParseFieldEntry(std::istringstream& line, FIELD_SCHEMA& out_field)
 {
+    PROFILE_FUNCTION();
     line >> out_field;
     if( line.fail() )
     {
@@ -46,6 +50,7 @@ inline bool isEndOfObject(char firstChar)
 
 static RETCODE GenerateObjectHeader(OBJECT_SCHEMA& object, std::ofstream& headerFile)
 {
+    PROFILE_FUNCTION();
     headerFile << "// GENERATED: DO NOT MODIFY!!\n";
     /* Header guard */
     headerFile << "#ifndef " << std::uppercase << object.objectName << "__HH";
@@ -68,6 +73,7 @@ static RETCODE GenerateObjectHeader(OBJECT_SCHEMA& object, std::ofstream& header
 
 static bool TryGenerateDataType(FIELD_SCHEMA& field, std::string& dataType)
 {
+    PROFILE_FUNCTION();
     switch(field.fieldType)
     {
         case 'c': // Char
@@ -116,6 +122,7 @@ static bool TryGenerateDataType(FIELD_SCHEMA& field, std::string& dataType)
 
 static bool TrySetFieldSize(FIELD_SCHEMA& field)
 {
+    PROFILE_FUNCTION();
     // Sizings are not accurate because of struct padding
     switch(field.fieldType)
     {
@@ -174,6 +181,7 @@ static bool TrySetFieldSize(FIELD_SCHEMA& field)
 
 static bool IsInByteBounds(const OBJECT_SCHEMA& object, const FIELD_SCHEMA& field, unsigned int& out_extra_bytes)
 {
+    PROFILE_FUNCTION();
     out_extra_bytes = ( object.objectSize + field.fieldSize ) % WORD_SIZE;
 
     // If this field doesn't end on a word boundary then we will need to add padding
@@ -193,6 +201,7 @@ static RETCODE AddBytePadding(OBJECT_SCHEMA& object, unsigned int extra_bytes)
 
 static RETCODE GenerateFieldHeader(FIELD_SCHEMA& field, std::ofstream& headerFile)
 {
+    PROFILE_FUNCTION();
     std::string dataType;
 
     if( !TryGenerateDataType(field, dataType) )
@@ -248,6 +257,7 @@ static RETCODE GenerateFieldHeader(FIELD_SCHEMA& field, std::ofstream& headerFil
 */
 static RETCODE GenerateObjectPythonFile(std::ofstream& pythonFile, OBJECT_SCHEMA& object)
 {
+    PROFILE_FUNCTION();
     std::stringstream format;
     std::stringstream classDefine;
     std::stringstream classInitFunc;
@@ -386,6 +396,7 @@ RETCODE GenerateObjectInfo(std::ofstream& headerFile, OBJECT_SCHEMA& object)
 
 RETCODE WriteObjectEnd( std::ofstream& headerFile, OBJECT_SCHEMA& object )
 {
+    PROFILE_FUNCTION();
     headerFile << "\n};";
     std::stringstream upperCaseSStream;
     upperCaseSStream << std::uppercase << std::string(object.objectName);
@@ -413,6 +424,7 @@ RETCODE WriteObjectEnd( std::ofstream& headerFile, OBJECT_SCHEMA& object )
 
 static RETCODE GenerateDatabaseFile(OBJECT_SCHEMA& object_entry, const std::string& object_name, const std::string& dbPath)
 {
+    PROFILE_FUNCTION();
     RETCODE retcode = RTN_OK;
     std::stringstream filepath;
     filepath << dbPath <<  object_entry.objectName << DB_EXT;
@@ -443,6 +455,7 @@ static RETCODE GenerateDatabaseFile(OBJECT_SCHEMA& object_entry, const std::stri
 
 static RETCODE readAllDBHeader(OBJECT_SCHEMA& object_entry, std::vector<std::string>& out_lines)
 {
+    PROFILE_FUNCTION();
     std::string line;
     bool entry_replaced = false;
     size_t lineNum = 1;
@@ -499,6 +512,7 @@ static RETCODE readAllDBHeader(OBJECT_SCHEMA& object_entry, std::vector<std::str
 
 static RETCODE writeAllDBHeader(std::vector<std::string>& out_lines)
 {
+    PROFILE_FUNCTION();
     std::stringstream allDBHeaderPath;
     std::string INSTALL_DIR =
         ConfigValues::Instance().Get(KDB_INSTALL_DIR);
@@ -534,6 +548,7 @@ static RETCODE writeAllDBHeader(std::vector<std::string>& out_lines)
 
 static RETCODE readAllDBPy(OBJECT_SCHEMA& object_entry, std::vector<std::string>& out_lines)
 {
+    PROFILE_FUNCTION();
     std::string line;
     bool entry_replaced = false;
     size_t lineNum = 1;
@@ -590,6 +605,7 @@ static RETCODE readAllDBPy(OBJECT_SCHEMA& object_entry, std::vector<std::string>
 
 static RETCODE writeAllDBPy(std::vector<std::string>& out_lines)
 {
+    PROFILE_FUNCTION();
     std::stringstream allDBHeaderPath;
     std::string INSTALL_DIR =
         ConfigValues::Instance().Get(KDB_INSTALL_DIR);
@@ -624,6 +640,7 @@ static RETCODE writeAllDBPy(std::vector<std::string>& out_lines)
 
 static RETCODE AddToAllDBHeader(OBJECT_SCHEMA& object_entry)
 {
+    PROFILE_FUNCTION();
     std::vector<std::string> out_lines;
 
     RETURN_RETCODE_IF_NOT_OK(readAllDBHeader(object_entry, out_lines));
@@ -635,6 +652,7 @@ static RETCODE AddToAllDBHeader(OBJECT_SCHEMA& object_entry)
 
 static RETCODE AddToAllDBPy(OBJECT_SCHEMA& object_entry)
 {
+    PROFILE_FUNCTION();
     std::vector<std::string> out_lines;
 
     RETURN_RETCODE_IF_NOT_OK(readAllDBPy(object_entry, out_lines));
@@ -646,6 +664,7 @@ static RETCODE AddToAllDBPy(OBJECT_SCHEMA& object_entry)
 
 static RETCODE OpenDBMapFile(std::ofstream& headerStream)
 {
+    PROFILE_FUNCTION();
     std::stringstream dbMapHeaderPath;
     std::string INSTALL_DIR =
         ConfigValues::Instance().Get(KDB_INSTALL_DIR);
@@ -673,6 +692,7 @@ static RETCODE OpenDBMapFile(std::ofstream& headerStream)
 
 static RETCODE OpenDBMapPyFile(std::ofstream& headerStream)
 {
+    PROFILE_FUNCTION();
     std::stringstream dbMapPyPath;
     std::string INSTALL_DIR =
         ConfigValues::Instance().Get(KDB_INSTALL_DIR);
@@ -700,6 +720,7 @@ static RETCODE OpenDBMapPyFile(std::ofstream& headerStream)
 
 static RETCODE WriteDBMapHeader(std::ofstream& headerStream)
 {
+    PROFILE_FUNCTION();
     headerStream << "//GENERATED FILE! DO NOT MODIFY\n";
     headerStream << "#ifndef __DB_MAP_HH\n#define __DB_MAP_HH\n";
 
@@ -715,6 +736,7 @@ static RETCODE WriteDBMapHeader(std::ofstream& headerStream)
 
 static RETCODE WriteDBMapPyHeader(std::ofstream& headerStream)
 {
+    PROFILE_FUNCTION();
     // DBMap.py contains a dictionary of all DB objects
     headerStream << "#GENERATED FILE! DO NOT MODIFY\n";
 
@@ -730,6 +752,7 @@ static RETCODE WriteDBMapPyHeader(std::ofstream& headerStream)
 
 static RETCODE WriteDBMapObject(std::ofstream& headerStream, const OBJECT_SCHEMA& object_entry)
 {
+    PROFILE_FUNCTION();
     std::stringstream upperCaseSStream;
     upperCaseSStream << std::uppercase << object_entry.objectName;
     const std::string& objName = upperCaseSStream.str();
@@ -746,6 +769,7 @@ static RETCODE WriteDBMapObject(std::ofstream& headerStream, const OBJECT_SCHEMA
 
 static RETCODE WriteDBMapPyObject(std::ofstream& pyStream, const OBJECT_SCHEMA& object_entry)
 {
+    PROFILE_FUNCTION();
     // "OBJECT":allDBs.PythonAPI.db.OBJECT.OBJEC,
     std::stringstream upperCaseSStream;
     upperCaseSStream << std::uppercase << object_entry.objectName;
@@ -758,6 +782,7 @@ static RETCODE WriteDBMapPyObject(std::ofstream& pyStream, const OBJECT_SCHEMA& 
 
 static RETCODE WriteDBMapFooter(std::ofstream& headerStream)
 {
+    PROFILE_FUNCTION();
     headerStream << "\n    };";
 
     headerStream
@@ -780,6 +805,7 @@ static RETCODE WriteDBMapFooter(std::ofstream& headerStream)
 
 static RETCODE WriteDBMapPyFooter(std::ofstream& pyStream)
 {
+    PROFILE_FUNCTION();
     pyStream << "\n}";
 
     return RTN_OK;
@@ -787,6 +813,7 @@ static RETCODE WriteDBMapPyFooter(std::ofstream& pyStream)
 
 static RETCODE GenerateObject(const OBJECT& objectName, const std::string& skmPath, OBJECT_SCHEMA& out_object_entry, bool strict)
 {
+    PROFILE_FUNCTION();
     RETCODE retcode = RTN_OK;
     std::string line;
     size_t firstNonEmptyChar = 0;
@@ -896,6 +923,7 @@ static RETCODE GenerateObject(const OBJECT& objectName, const std::string& skmPa
 
 static RETCODE GenerateHeaderFile(OBJECT_SCHEMA& object_entry, const std::string& header_file_path)
 {
+    PROFILE_FUNCTION();
     std::ofstream headerFile;
     RETCODE retcode = RTN_OK;
 
@@ -921,6 +949,7 @@ static RETCODE GenerateHeaderFile(OBJECT_SCHEMA& object_entry, const std::string
 
 static RETCODE GeneratePythonFile(OBJECT_SCHEMA& object_entry, const std::string& py_file_path)
 {
+    PROFILE_FUNCTION();
     std::ofstream pythonFile;
     RETCODE retcode = RTN_OK;
 
@@ -961,6 +990,7 @@ RETCODE GenerateObjectDBFiles(const OBJECT& objectName,
     std::ofstream& dbMapPyStream,
     bool strict)
 {
+    PROFILE_FUNCTION();
     OBJECT_SCHEMA object_entry;
     RETCODE retcode = GenerateObject(objectName, skmPath, object_entry, strict);
     if( RTN_OK != retcode )
@@ -1039,6 +1069,7 @@ RETCODE GenerateObjectDBFiles(const OBJECT& objectName,
 
 RETCODE GetSchemaFileObjectName(const std::string& skmFileName, std::string& out_ObjectName)
 {
+    PROFILE_FUNCTION();
     if("." == skmFileName || ".." == skmFileName)
     {
         out_ObjectName = skmFileName;
@@ -1066,6 +1097,7 @@ RETCODE GetSchemaFileObjectName(const std::string& skmFileName, std::string& out
 
 RETCODE GenerateAllDBFiles(const std::string& skmPath, const std::string& incPath, const std::string& pyPath, bool strict)
 {
+    PROFILE_FUNCTION();
     RETCODE retcode = RTN_OK;
     std::vector<std::string> schema_files;
     DIR *directory;

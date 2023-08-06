@@ -3,6 +3,8 @@
 #include <Constants.hh>
 #include <ConfigValues.hh>
 
+#include <pthread_profiler.hh>
+
 class CLI_DatabaseArgs : public CLI::CLI_Argument<OBJECT, 1, 1>
 {
         using CLI_Argument::CLI_Argument;
@@ -27,6 +29,8 @@ static std::string currentDirectory(char* argv[])
 
 int main(int argc, char* argv[])
 {
+
+    PROFILE_FUNCTION();
     CLI_DatabaseArgs databaseArgs("--object", "Name of database object");
     CLI::CLI_StringArgument inc_path("-h", "Path to write object header file");
     CLI::CLI_StringArgument skm_path("-s", "Path to write object schema file");
