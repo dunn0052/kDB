@@ -1,4 +1,0 @@
-KDB_INET_ADDRESS=192.168.0.188
-KDB_INET_PORT=5000
-
-KDB_INSTALL_DIR=/home/osboxes/Documents/Projects/kDB/
