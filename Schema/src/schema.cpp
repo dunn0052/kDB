@@ -162,7 +162,7 @@ static bool TrySetFieldSize(FIELD_SCHEMA& field)
             field.isMultiIndex = false;
             break;
         }
-        case 'x':
+        case 'x': // padding
         {
             field.fieldSize = sizeof(unsigned char);
             field.isMultiIndex = false;

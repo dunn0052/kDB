@@ -14,61 +14,43 @@ static bool PrintField (const FIELD_SCHEMA& field, char* p_object)
 
     switch(field.fieldType)
     {
-        case 'O': // Object
-        {
-            fieldStream <<
-                *reinterpret_cast<OBJECT*>(p_fieldAddress);
-            break;
-        }
-        case 'F': // Field
-        {
-            fieldStream <<
-                *reinterpret_cast<FIELD*>(p_fieldAddress);
-            break;
-        }
-        case 'R': // Record
-        {
-            fieldStream <<
-                *reinterpret_cast<RECORD*>(p_fieldAddress);
-            break;
-        }
-        case 'I': // Index
-        {
-            fieldStream <<
-                *reinterpret_cast<INDEX*>(p_fieldAddress);
-            break;
-        }
-        case 'C': // Char
+        case 'c': // Char
         {
             fieldStream <<
                 *reinterpret_cast<char*>(p_fieldAddress);
             break;
         }
-        case 'S': // String
+        case 's': // String
         {
             fieldStream.rdbuf()->sputn(reinterpret_cast<char*>(p_fieldAddress),
                         sizeof(char) * field.numElements);
             break;
         }
-        case 'N': // signed integer
+        case 'i': // signed integer
         {
             fieldStream <<
                 *reinterpret_cast<int*>(p_fieldAddress);
             break;
         }
-        case 'U': // Unsigned integer
+        case 'I': // Unsigned integer
         {
             fieldStream <<
                 *reinterpret_cast<unsigned int*>(p_fieldAddress);
             break;
         }
-        case 'B': // Bool
+        case '?': // Bool
         {
             fieldStream <<
                 *reinterpret_cast<bool*>(p_fieldAddress);
             break;
         }
-        case 'Y': // Unsigned char (byte)
+        case 'B': // Unsigned char (byte)
+        {
+            fieldStream <<
+                *reinterpret_cast<unsigned char*>(p_fieldAddress);
+            break;
+        }
+        case 'x': // padding
         {
             fieldStream <<
                 *reinterpret_cast<unsigned char*>(p_fieldAddress);
