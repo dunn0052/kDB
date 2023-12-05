@@ -8,6 +8,7 @@
 #include <string>
 #include <Logger.hh>
 #include <ConfigValues.hh>
+#include <DBHeader.hh>
 
 #include <pthread_profiler.hh>
 
@@ -24,7 +25,7 @@ static RETCODE GenerateDatabaseFile(const OBJECT& object_name, const std::string
     if(it != dbSizes.end())
     {
         //element found;
-        fileSize = it->second.objectSize * it->second.numberOfRecords;
+        fileSize = sizeof(DBHeader) + it->second.objectSize * it->second.numberOfRecords;
     }
     else
     {
@@ -43,6 +44,24 @@ static RETCODE GenerateDatabaseFile(const OBJECT& object_name, const std::string
     {
         LOG_WARN("Failed to truncate ", path, " to size ", fileSize);
         retcode |= RTN_MALLOC_FAIL;
+    }
+
+    DBHeader dbHeader = {0};
+    dbHeader.m_NumRecords = it->second.numberOfRecords;
+    strncpy(dbHeader.m_ObjectName, object_name, sizeof(OBJECT));
+
+    pthread_mutexattr_t dbLockAttributes = {0};
+    pthread_mutexattr_init(&dbLockAttributes);
+    pthread_mutexattr_setpshared(&dbLockAttributes, PTHREAD_PROCESS_SHARED);
+    pthread_mutex_init(&dbHeader.m_DBLock, &dbLockAttributes);
+    pthread_mutexattr_destroy(&dbLockAttributes);
+
+    size_t numbytes = write(fd, static_cast<void*>(&dbHeader), sizeof(DBHeader));
+
+    if(sizeof(DBHeader) != numbytes)
+    {
+        LOG_ERROR("Failed to create DB header for: ", object_name);
+        retcode |= RTN_EOF;
     }
 
     if( close(fd) )
@@ -84,6 +103,8 @@ int main(int argc, char* argv[])
         {
             LOG_WARN("Failed to generate ", db_path.c_str(), objectArg.GetValue(), ".db");
         }
+
+        return RTN_OK;
     }
     else if(allArg.IsInUse())
     {
@@ -110,6 +131,8 @@ int main(int argc, char* argv[])
                 LOG_WARN("Failed to generate ", db_path.c_str(), current_object, ".db");
             }
         }
+
+        return RTN_OK;
     }
     else
     {

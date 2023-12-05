@@ -4,6 +4,7 @@
 #include <OFRI.hh>
 #include <retcode.hh>
 #include <demangler.hh>
+#include <DBHeader.hh>
 
 #include <cstring>
 #include <string>
@@ -44,7 +45,7 @@ class Database
             std::stringstream filepath;
             filepath << "./db/"; /* <<  type_name<OBJ_TYPE>() << ".db";*/
             const std::string path = filepath.str();
-            size_t fileSize = sizeof(OBJ_TYPE) * numRecords;
+            size_t fileSize = sizeof(DBHeader) + sizeof(OBJ_TYPE) * numRecords;
 
             int fd = open(path.c_str(), O_RDWR | O_CREAT, 0666);
             if( 0 > fd )
@@ -52,10 +53,16 @@ class Database
                 return  RTN_NOT_FOUND;
             }
 
+            DBHeader dbHeader = {0};
+            read(fd, &dbHeader, sizeof(DBHeader));
+
             if( ftruncate64(fd, fileSize) )
             {
                 retcode |= RTN_MALLOC_FAIL;
             }
+
+            dbHeader.m_NumRecords = numRecords;
+            write(fd, static_cast<void*>(&dbHeader), sizeof(DBHeader));
 
             if( close(fd) )
             {

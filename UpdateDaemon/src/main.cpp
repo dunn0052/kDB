@@ -59,7 +59,7 @@ static void ClientRequest(const INET_PACKAGE* package)
 class TestRecv
 {
     public:
-    void TesetClassRecv(const INET_PACKAGE* package)
+    void TestClassRecv(const INET_PACKAGE* package)
     {
         LOG_DEBUG("Client ", package->header.connection.address, ":", package->header.connection.port, " request");
 
@@ -125,13 +125,13 @@ int main(int argc, char* argv[])
     MonitorThread monitor;
     monitor.Start(&g_incoming_changes, &g_outgoing_changes);
 
-    PollThread connection(portArg.GetValue());
+    PollThread connection(port);
 
     LOG_INFO("Connection on ", connection.GetTCPAddress(), ":", connection.GetTCPPort());
 
     TestRecv test;
 
-    connection.m_OnReceive += [&](const INET_PACKAGE* package){ test.TesetClassRecv(package); };
+    connection.m_OnReceive += [&](const INET_PACKAGE* package){ test.TestClassRecv(package); };
     connection.m_OnClientConnect += clientConnect;
     connection.m_OnDisconnect += clientDisconnect;
 

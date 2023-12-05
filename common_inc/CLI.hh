@@ -212,7 +212,7 @@ namespace CLI
             std::stringstream stream(conversion);
 
             // Must get OBJECT seperately or FRI will be included in stream out
-            std::string token; 
+            std::string token;
             std::getline(stream, token, '.');
             if(stream.good())
             {

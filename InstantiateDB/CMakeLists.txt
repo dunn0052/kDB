@@ -19,3 +19,8 @@ add_dependencies(${PROJECT_NAME}
   "Schema")
 
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
+
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+ WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND InstantiateDB -a
+)

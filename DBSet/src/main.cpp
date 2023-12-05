@@ -45,11 +45,11 @@ int main(int argc, char* argv[])
             retcode |= UpdateDBValue(ofri, valueArg.GetValue());
             if(IS_RETCODE_OK(retcode))
             {
-                LOG_INFO("Updated ", ofri.o, ".", ofri.f, ".", ofri.r, ".", ofri.i, " = ", valueArg.GetValue());
+                LOG_INFO("Updated ", ofri, " = ", valueArg.GetValue());
             }
             else
             {
-                LOG_INFO("Failed to update ", ofri.o, ".", ofri.f, ".", ofri.r, ".", ofri.i, " with ", valueArg.GetValue());
+                LOG_INFO("Failed to update ", ofri, " with ", valueArg.GetValue());
             }
         }
         else
@@ -58,11 +58,11 @@ int main(int argc, char* argv[])
             retcode |= ReadDBValue(ofri, value);
             if(IS_RETCODE_OK(retcode))
             {
-                LOG_INFO("Value of ", ofri.o, ".", ofri.f, ".", ofri.r, ".", ofri.i, " = ", value);
+                LOG_INFO("Value of ", ofri, " = ", value);
             }
             else
             {
-                LOG_INFO("Failed to read ", ofri.o, ".", ofri.f, ".", ofri.r, ".", ofri.i);
+                LOG_INFO("Failed to read ", ofri);
             }
         }
 

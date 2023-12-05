@@ -293,7 +293,7 @@ static RETCODE GenerateObjectPythonFile(std::ofstream& pythonFile, OBJECT_SCHEMA
 
         if(field.isMultiIndex) // Print like a string
         {
-            strFunc << field.fieldName << ": { str(self." << field.fieldName << ", encoding = 'UTF-8').rstrip('\00) }";
+            strFunc << field.fieldName << ": { str(self." << field.fieldName << ", encoding = 'UTF-8').rstrip() } ";
         }
         else
         {

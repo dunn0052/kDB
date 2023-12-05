@@ -30,6 +30,9 @@
     // Bad argument
     constexpr RETCODE RTN_BAD_ARG = 0x0040;
 
+    // Timeout
+    constexpr RETCODE RTN_TIMEOUT = 0x0080;
+
     #define IS_RETCODE_OK( RET ) (RTN_OK == RET)
 
     #define RETURN_RETCODE_IF_NOT_OK( RET ) \

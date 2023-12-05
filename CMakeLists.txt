@@ -23,4 +23,6 @@ add_subdirectory(InstantiateDB)
 add_subdirectory(Listener)
 add_subdirectory(UpdateDaemon)
 
+add_subdirectory(LockedDB)
+
 add_subdirectory(test)

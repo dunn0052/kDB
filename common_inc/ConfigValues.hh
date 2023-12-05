@@ -76,7 +76,7 @@ private:
     // Variable format is VARIABLE_NAME=value
     std::string GetFromFile(const std::string& variableName)
     {
-        static const std::string CONFIG_FILE_NAME = "./config/kDB_config.txt";
+        static const std::string CONFIG_FILE_NAME = "../../config/kDB_config";
         std::ifstream configFile;
         configFile.open(CONFIG_FILE_NAME,
             std::fstream::in);

@@ -11,7 +11,11 @@
 #include <sys/mman.h>
 #include <string>
 #include <sstream>
+#include <tuple>
 #include <retcode.hh>
+#include <DBHeader.hh>
+#include <thread>
+#include <chrono>
 
 class DatabaseAccess
 {
@@ -92,7 +96,7 @@ class DatabaseAccess
         {
             if(m_IsOpen && nullptr != m_DBAddress)
             {
-                size_t byte_index = m_Object.objectSize * record;
+                size_t byte_index = sizeof(DBHeader) + m_Object.objectSize * record;
                 if( m_Size > byte_index )
                 {
                     return m_DBAddress + byte_index;
@@ -106,7 +110,7 @@ class DatabaseAccess
         {
             if(m_IsOpen && nullptr != m_DBAddress)
             {
-                size_t byte_index = (m_Object.objectSize * ofri.r) +
+                size_t byte_index = sizeof(DBHeader) + (m_Object.objectSize * ofri.r) +
                     m_Object.fields[ofri.f].fieldOffset +
                     (m_Object.fields[ofri.f].fieldSize * ofri.i);
                 if( m_Size > byte_index )
@@ -120,6 +124,11 @@ class DatabaseAccess
 
         RETCODE WriteValue(const OFRI& ofri, const std::string& value)
         {
+            if(!m_IsOpen)
+            {
+                return RTN_NULL_OBJ;
+            }
+
             RETCODE retcode = RTN_OK;
             void* p_value = Get(ofri);
             if(nullptr == p_value)
@@ -141,9 +150,11 @@ class DatabaseAccess
                         return RTN_BAD_ARG;
                     }
 
+                    pthread_mutex_lock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
                     memset(p_value, 0, sizeof(char*) * m_Object.fields[ofri.f].numElements);
                     strncpy(static_cast<char*>(p_value),
                         value.c_str(), value.size());
+                    pthread_mutex_unlock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
                     break;
                 }
                 case 'c': // Char
@@ -152,8 +163,9 @@ class DatabaseAccess
                     {
                         return RTN_BAD_ARG;
                     }
-
+                    pthread_mutex_lock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
                     *static_cast<char*>(p_value) = value.c_str()[0];
+                    pthread_mutex_unlock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
                     break;
                 }
                 case 'B': // Unsigned char (byte)
@@ -163,7 +175,9 @@ class DatabaseAccess
                         return RTN_BAD_ARG;
                     }
 
+                    pthread_mutex_lock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
                     *static_cast<unsigned char*>(p_value) = value.c_str()[0];
+                    pthread_mutex_unlock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
                     break;
                 }
                 case 'i': // signed integer
@@ -174,7 +188,9 @@ class DatabaseAccess
                         return RTN_BAD_ARG;
                     }
 
+                    pthread_mutex_lock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
                     *static_cast<int*>(p_value) = atol(value.c_str());
+                    pthread_mutex_unlock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
                     break;
                 }
                 case 'I': // Unsigned integer
@@ -184,7 +200,10 @@ class DatabaseAccess
                     {
                         return RTN_BAD_ARG;
                     }
+
+                    pthread_mutex_lock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
                     *static_cast<unsigned int*>(p_value) = int_val;
+                    pthread_mutex_unlock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
                     break;
                 }
                 case '?': // Bool
@@ -196,12 +215,16 @@ class DatabaseAccess
                     if("FALSE" == value_buffer.str() or
                         "0" == value_buffer.str())
                     {
+                        pthread_mutex_lock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
                         *static_cast<bool*>(p_value) = false;
+                        pthread_mutex_unlock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
                     }
                     else if("TRUE" != value_buffer.str() or
                         "1" != value_buffer.str())
                     {
+                        pthread_mutex_lock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
                         *static_cast<bool*>(p_value) = true;
+                        pthread_mutex_unlock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
                     }
                     else
                     {
@@ -219,8 +242,135 @@ class DatabaseAccess
             return RTN_OK;
         }
 
+        RETCODE WriteValue(std::vector<std::tuple<OFRI, std::string>> values)
+        {
+            if(!m_IsOpen)
+            {
+                return RTN_NULL_OBJ;
+            }
+
+            RETCODE retcode = RTN_OK;
+            pthread_mutex_lock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
+
+            for(std::tuple<OFRI, std::string>& object : values)
+            {
+                OFRI& ofri = std::get<0>(object);
+                std::string& value = std::get<1>(object);
+
+                void* p_value = Get(ofri);
+                if(nullptr == p_value)
+                {
+                    return RTN_NULL_OBJ;
+                }
+
+                if(ofri.i > m_Object.fields[ofri.f].numElements - 1)
+                {
+                    return RTN_NULL_OBJ;
+                }
+
+                switch(m_Object.fields[ofri.f].fieldType)
+                {
+                    case 's': // String
+                    {
+                        if(value.size() > sizeof(char*) * m_Object.fields[ofri.f].numElements)
+                        {
+                            pthread_mutex_unlock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
+                            return RTN_BAD_ARG;
+                        }
+
+                        memset(p_value, 0, sizeof(char*) * m_Object.fields[ofri.f].numElements);
+                        strncpy(static_cast<char*>(p_value),
+                            value.c_str(), value.size());
+                        break;
+                    }
+                    case 'c': // Char
+                    {
+                        if(value.size() > 1)
+                        {
+                            pthread_mutex_unlock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
+                            return RTN_BAD_ARG;
+                        }
+
+                        *static_cast<char*>(p_value) = value.c_str()[0];
+                        break;
+                    }
+                    case 'B': // Unsigned char (byte)
+                    {
+                        if(value.size() > 1)
+                        {
+                            pthread_mutex_unlock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
+                            return RTN_BAD_ARG;
+                        }
+
+                        *static_cast<unsigned char*>(p_value) = value.c_str()[0];
+                        break;
+                    }
+                    case 'i': // signed integer
+                    {
+                        int int_val = atol(value.c_str());
+                        if(0 == int_val and "0" != value.c_str())
+                        {
+                            pthread_mutex_unlock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
+                            return RTN_BAD_ARG;
+                        }
+
+                        *static_cast<int*>(p_value) = atol(value.c_str());
+                        break;
+                    }
+                    case 'I': // Unsigned integer
+                    {
+                        unsigned int int_val = static_cast<unsigned int>(atol(value.c_str()));
+                        if(0 == int_val and "0" != value.c_str())
+                        {
+                            pthread_mutex_unlock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
+                            return RTN_BAD_ARG;
+                        }
+
+                        *static_cast<unsigned int*>(p_value) = int_val;
+                        break;
+                    }
+                    case '?': // Bool
+                    {
+                        std::stringstream value_buffer;
+                        value_buffer << std::uppercase << value;
+                        bool bool_val = true;
+
+                        if("FALSE" == value_buffer.str() or
+                            "0" == value_buffer.str())
+                        {
+                            *static_cast<bool*>(p_value) = false;
+                        }
+                        else if("TRUE" != value_buffer.str() or
+                            "1" != value_buffer.str())
+                        {
+                            *static_cast<bool*>(p_value) = true;
+                        }
+                        else
+                        {
+                            pthread_mutex_unlock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
+                            return RTN_BAD_ARG;
+                        }
+
+                        break;
+                    }
+                    default:
+                    {
+                        pthread_mutex_unlock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
+                        return RTN_BAD_ARG;
+                    }
+                }
+            }
+
+            pthread_mutex_unlock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
+            return RTN_OK;
+        }
+
         RETCODE ReadValue(const OFRI& ofri, std::string& value)
         {
+            if(!m_IsOpen)
+            {
+                return RTN_NULL_OBJ;
+            }
             void* p_value = Get(ofri);
             if(nullptr == p_value)
             {
@@ -283,6 +433,90 @@ class DatabaseAccess
             value = db_value.str();
             return RTN_OK;
         }
+
+        RETCODE ReadValue(std::vector<OFRI>& ofris, std::vector<std::string>& values)
+        {
+
+            if(!m_IsOpen)
+            {
+                return RTN_NULL_OBJ;
+            }
+
+            for(const OFRI& ofri : ofris)
+            {
+                void* p_value = Get(ofri);
+                if(nullptr == p_value)
+                {
+                    return RTN_NULL_OBJ;
+                }
+
+                if(ofri.i > m_Object.fields[ofri.f].numElements - 1)
+                {
+                    return RTN_NULL_OBJ;
+                }
+
+                std::stringstream db_value;
+                switch(m_Object.fields[ofri.f].fieldType)
+                {
+                    case 'B': // Unsigned char (byte)
+                    {
+                        db_value << *static_cast<unsigned char*>(p_value);
+                        break;
+                    }
+                    case 'c': // Char
+                    {
+                        db_value << *static_cast<char*>(p_value);
+                        break;
+                    }
+                    case 's': // String
+                    {
+                        db_value.rdbuf()->sputn(reinterpret_cast<char*>(p_value),
+                            sizeof(char) * m_Object.fields[ofri.f].numElements);
+                        break;
+                    }
+                    case 'i': // signed integer
+                    {
+                        db_value << *static_cast<int*>(p_value);
+                        break;
+                    }
+                    case 'I': // Unsigned integer
+                    {
+                        db_value << *static_cast<unsigned int*>(p_value);
+                        break;
+                    }
+                    case '?': // Bool
+                    {
+                        db_value << *static_cast<bool*>(p_value);
+                        break;
+                    }
+                    default:
+                    {
+                        return RTN_BAD_ARG;
+                    }
+                }
+
+                if(!db_value.good())
+                {
+                    LOG_WARN("Schema error for: ", ofri.o,
+                            " could not convert field: ", ofri.f, " to: ",
+                            m_Object.fields[ofri.f].fieldType);
+                    return RTN_NULL_OBJ;
+                }
+
+                values.push_back(db_value.str());
+            }
+
+            return RTN_OK;
+        }
+
+    RECORD NumRecords(void)
+    {
+        if(m_IsOpen)
+        {
+            return reinterpret_cast<DBHeader*>(m_DBAddress)->m_NumRecords;
+        }
+        return 0;
+    }
 
     inline bool IsValid()
     {
