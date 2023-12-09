@@ -152,6 +152,7 @@ class DatabaseAccess
 
                     pthread_mutex_lock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
                     memset(p_value, 0, sizeof(char*) * m_Object.fields[ofri.f].numElements);
+                    reinterpret_cast<DBHeader*>(m_DBAddress)->m_LastWritten = ofri.r;
                     strncpy(static_cast<char*>(p_value),
                         value.c_str(), value.size());
                     pthread_mutex_unlock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
@@ -164,6 +165,7 @@ class DatabaseAccess
                         return RTN_BAD_ARG;
                     }
                     pthread_mutex_lock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
+                    reinterpret_cast<DBHeader*>(m_DBAddress)->m_LastWritten = ofri.r;
                     *static_cast<char*>(p_value) = value.c_str()[0];
                     pthread_mutex_unlock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
                     break;
@@ -176,6 +178,7 @@ class DatabaseAccess
                     }
 
                     pthread_mutex_lock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
+                    reinterpret_cast<DBHeader*>(m_DBAddress)->m_LastWritten = ofri.r;
                     *static_cast<unsigned char*>(p_value) = value.c_str()[0];
                     pthread_mutex_unlock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
                     break;
@@ -189,6 +192,7 @@ class DatabaseAccess
                     }
 
                     pthread_mutex_lock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
+                    reinterpret_cast<DBHeader*>(m_DBAddress)->m_LastWritten = ofri.r;
                     *static_cast<int*>(p_value) = atol(value.c_str());
                     pthread_mutex_unlock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
                     break;
@@ -202,6 +206,7 @@ class DatabaseAccess
                     }
 
                     pthread_mutex_lock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
+                    reinterpret_cast<DBHeader*>(m_DBAddress)->m_LastWritten = ofri.r;
                     *static_cast<unsigned int*>(p_value) = int_val;
                     pthread_mutex_unlock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
                     break;
@@ -216,6 +221,7 @@ class DatabaseAccess
                         "0" == value_buffer.str())
                     {
                         pthread_mutex_lock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
+                        reinterpret_cast<DBHeader*>(m_DBAddress)->m_LastWritten = ofri.r;
                         *static_cast<bool*>(p_value) = false;
                         pthread_mutex_unlock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
                     }
@@ -223,6 +229,7 @@ class DatabaseAccess
                         "1" != value_buffer.str())
                     {
                         pthread_mutex_lock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
+                        reinterpret_cast<DBHeader*>(m_DBAddress)->m_LastWritten = ofri.r;
                         *static_cast<bool*>(p_value) = true;
                         pthread_mutex_unlock(&reinterpret_cast<DBHeader*>(m_DBAddress)->m_DBLock);
                     }
@@ -281,6 +288,7 @@ class DatabaseAccess
                         memset(p_value, 0, sizeof(char*) * m_Object.fields[ofri.f].numElements);
                         strncpy(static_cast<char*>(p_value),
                             value.c_str(), value.size());
+                        reinterpret_cast<DBHeader*>(m_DBAddress)->m_LastWritten = ofri.r;
                         break;
                     }
                     case 'c': // Char
@@ -291,6 +299,7 @@ class DatabaseAccess
                             return RTN_BAD_ARG;
                         }
 
+                        reinterpret_cast<DBHeader*>(m_DBAddress)->m_LastWritten = ofri.r;
                         *static_cast<char*>(p_value) = value.c_str()[0];
                         break;
                     }
@@ -302,6 +311,7 @@ class DatabaseAccess
                             return RTN_BAD_ARG;
                         }
 
+                        reinterpret_cast<DBHeader*>(m_DBAddress)->m_LastWritten = ofri.r;
                         *static_cast<unsigned char*>(p_value) = value.c_str()[0];
                         break;
                     }
@@ -314,6 +324,7 @@ class DatabaseAccess
                             return RTN_BAD_ARG;
                         }
 
+                        reinterpret_cast<DBHeader*>(m_DBAddress)->m_LastWritten = ofri.r;
                         *static_cast<int*>(p_value) = atol(value.c_str());
                         break;
                     }
@@ -326,6 +337,7 @@ class DatabaseAccess
                             return RTN_BAD_ARG;
                         }
 
+                        reinterpret_cast<DBHeader*>(m_DBAddress)->m_LastWritten = ofri.r;
                         *static_cast<unsigned int*>(p_value) = int_val;
                         break;
                     }
@@ -338,11 +350,13 @@ class DatabaseAccess
                         if("FALSE" == value_buffer.str() or
                             "0" == value_buffer.str())
                         {
+                            reinterpret_cast<DBHeader*>(m_DBAddress)->m_LastWritten = ofri.r;
                             *static_cast<bool*>(p_value) = false;
                         }
                         else if("TRUE" != value_buffer.str() or
                             "1" != value_buffer.str())
                         {
+                            reinterpret_cast<DBHeader*>(m_DBAddress)->m_LastWritten = ofri.r;
                             *static_cast<bool*>(p_value) = true;
                         }
                         else
@@ -528,7 +542,7 @@ class DatabaseAccess
         char* MapObject(int fd, off_t size)
         {
             char *p_return = static_cast<char*>( mmap(nullptr, size,
-                    PROT_READ | PROT_WRITE, MAP_SHARED,
+                    PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE,
                     fd, 0) );
 
             if( p_return == MAP_FAILED )
